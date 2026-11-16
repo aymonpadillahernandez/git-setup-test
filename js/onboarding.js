@@ -15,7 +15,7 @@ export function showOnboarding() {
         <h1>Welcome to Lift</h1>
         <ul class="onb-features">
           <li><span class="onb-fi blue">${icon('calendar', { size: 30, stroke: 2.2 })}</span><div><strong>Today’s workout, ready to go</strong><p>Plan your week once. Each day opens on that day’s workout with last week’s weight and reps.</p></div></li>
-          <li><span class="onb-fi orange">${icon('chart', { size: 30, stroke: 2.2 })}</span><div><strong>See every exercise evolve</strong><p>Charts for weight, reps and estimated strength, plus a week-by-week log of every set.</p></div></li>
+          <li><span class="onb-fi orange">${icon('chart', { size: 30, stroke: 2.2 })}</span><div><strong>See every exercise evolve</strong><p>Simple charts of your weight and reps, plus a week-by-week log of every set.</p></div></li>
           <li><span class="onb-fi gold">${icon('trophy', { size: 30, stroke: 2.2 })}</span><div><strong>Always know what to beat</strong><p>Today’s session becomes next time’s baseline. Lift sets a target to beat and celebrates every record.</p></div></li>
         </ul>
       </div>

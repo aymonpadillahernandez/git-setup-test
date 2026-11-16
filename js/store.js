@@ -2,7 +2,7 @@
 //
 // Shape:
 // {
-//   version, settings: { unit, weeklyGoal, weekStart, rest, formula, planMode, onboarded },
+//   version, settings: { unit, weeklyGoal, weekStart, rest, planMode, onboarded },
 //              planMode: 'rotation' (routines in order, any days) | 'schedule' (fixed weekdays)
 //   exercises: [{ id, name, muscle }],
 //   routines:  [{ id, name, items: [{ exId, sets, repMin, repMax }] }],
@@ -30,7 +30,7 @@ export function uid() {
 function fresh() {
   return {
     version: VERSION,
-    settings: { unit: 'kg', weeklyGoal: 4, weekStart: 1, rest: 90, formula: 'epley', planMode: 'rotation', onboarded: false },
+    settings: { unit: 'kg', weeklyGoal: 4, weekStart: 1, rest: 90, planMode: 'rotation', onboarded: false },
     exercises: DEFAULT_EXERCISES.map(([id, name, muscle]) => ({ id, name, muscle })),
     routines: [],
     schedule: {},

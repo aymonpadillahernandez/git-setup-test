@@ -1,34 +1,10 @@
 // Training statistics derived from the workout log.
 
 import { db, rev, routineById, scheduledRoutine } from './store.js';
-import { startOfWeek, startOfDay, addDays, KG_PER_LB } from './format.js';
+import { startOfWeek, startOfDay, addDays, KG_PER_LB, wVal } from './format.js';
 import { DEFAULT_REP_RANGE } from './data.js';
 
-/**
- * Estimated one-rep max: the standard way to turn "weight × reps" into one strength
- * number, so a heavier set and a set with more reps can be compared.
- * Both formulas are widely used and most accurate for sets of about 1–10 reps.
- */
-export const FORMULAS = {
-  epley: { label: 'Epley', text: 'weight × (1 + reps ÷ 30)' },
-  brzycki: { label: 'Brzycki', text: 'weight × 36 ÷ (37 − reps)' },
-};
-
-export function e1rm(w, r) {
-  if (!w || !r) return 0;
-  if (r === 1) return w;
-  if (db.settings.formula === 'brzycki') return (w * 36) / (37 - Math.min(r, 36));
-  return w * (1 + r / 30);
-}
-
-export const setVolume = (s) => (s.w || 0) * (s.r || 0);
 export const doneSets = (wex) => wex.sets.filter((s) => s.done && s.r > 0);
-
-export function workoutVolume(workout) {
-  let v = 0;
-  for (const ex of workout.exercises) for (const s of doneSets(ex)) v += setVolume(s);
-  return v;
-}
 
 export function workoutSetCount(workout) {
   return workout.exercises.reduce((n, ex) => n + doneSets(ex).length, 0);
@@ -84,45 +60,48 @@ export function lastSession(exId, { excludeId, before = Infinity, routineId = nu
   return (routineId && list.find((s) => ok(s) && s.workout.routineId === routineId)) || list.find(ok) || null;
 }
 
-/** All-time bests from sessions before `before`, ignoring `excludeId`. */
+const wKey = (w) => (w || 0).toFixed(3);
+
+/**
+ * All-time bests from sessions before `before`, ignoring `excludeId`:
+ * heaviest set, most reps in one set, and the most reps done at each weight.
+ */
 export function bestsFor(exId, { excludeId, before = Infinity } = {}) {
-  const b = { maxW: 0, maxWSet: null, maxE1rm: 0, maxReps: 0, maxVol: 0, maxVolDate: null, sessions: 0, maxWDate: null, maxE1rmDate: null, maxRepsDate: null, maxE1rmSet: null };
+  const b = { maxW: 0, maxWSet: null, maxWDate: null, maxReps: 0, maxRepsSet: null, maxRepsDate: null, sessions: 0, repsAt: new Map() };
   for (const { workout, sets } of sessionsFor(exId)) {
     if (workout.id === excludeId || workout.start >= before) continue;
     b.sessions++;
-    let vol = 0;
     for (const s of sets) {
-      vol += setVolume(s);
       if ((s.w || 0) > b.maxW || (s.w && s.w === b.maxW && s.r > (b.maxWSet?.r || 0))) {
         b.maxW = s.w || 0; b.maxWSet = s; b.maxWDate = workout.start;
       }
-      const est = e1rm(s.w, s.r);
-      if (est > b.maxE1rm) { b.maxE1rm = est; b.maxE1rmSet = s; b.maxE1rmDate = workout.start; }
-      if (s.r > b.maxReps) { b.maxReps = s.r; b.maxRepsDate = workout.start; }
+      if (s.r > b.maxReps) { b.maxReps = s.r; b.maxRepsSet = s; b.maxRepsDate = workout.start; }
+      const k = wKey(s.w);
+      if (s.r > (b.repsAt.get(k) || 0)) b.repsAt.set(k, s.r);
     }
-    if (vol > b.maxVol) { b.maxVol = vol; b.maxVolDate = workout.start; }
   }
   return b;
 }
 
-/** Does this set beat the all-time bests (from earlier workouts)? Returns a PR type or null. */
+/**
+ * Is this set a personal record compared with earlier workouts?
+ * - 'weight': heavier than ever before
+ * - 'reps':   more reps than ever at a weight you've used before (or bodyweight)
+ */
 export function setPRType(set, bests) {
   if (!set || !set.done || !set.r || !bests || bests.sessions === 0) return null;
-  if (set.w > 0) {
-    if (set.w > bests.maxW) return 'weight';
-    if (e1rm(set.w, set.r) > bests.maxE1rm + 1e-9) return 'e1rm';
-    return null;
-  }
-  if (bests.maxW === 0 && set.r > bests.maxReps) return 'reps';
+  if (set.w > 0 && set.w > bests.maxW + 1e-9) return 'weight';
+  const prev = bests.repsAt.get(wKey(set.w));
+  if (prev != null && set.r > prev) return 'reps';
   return null;
 }
 
-export const PR_LABELS = {
-  weight: 'Heaviest weight',
-  e1rm: 'Best est. 1RM',
-  reps: 'Most reps',
-  volume: 'Most volume',
-};
+/** Plain-language label for a record. */
+export function prLabel(pr, unit) {
+  if (pr.type === 'weight') return 'Heaviest weight';
+  if (pr.type === 'reps') return pr.w ? `Most reps with ${wVal(pr.w, unit)} ${unit}` : 'Most reps';
+  return 'New best';
+}
 
 /** Personal records set in `workout` compared with everything before it. One per exercise. */
 export function computePRs(workout) {
@@ -136,13 +115,16 @@ export function computePRs(workout) {
     const prior = bestsFor(wex.exId, { excludeId: workout.id, before: workout.start });
     if (prior.sessions === 0) continue;
     const top = topSet(sets);
-    const bestE = sets.reduce((a, s) => (e1rm(s.w, s.r) > e1rm(a.w, a.r) ? s : a), sets[0]);
-    const vol = sets.reduce((v, s) => v + setVolume(s), 0);
-    const maxReps = Math.max(...sets.map((s) => s.r));
-    if (top.w > 0 && top.w > prior.maxW) prs.push({ exId: wex.exId, type: 'weight', w: top.w, r: top.r });
-    else if (top.w > 0 && e1rm(bestE.w, bestE.r) > prior.maxE1rm + 1e-9) prs.push({ exId: wex.exId, type: 'e1rm', w: bestE.w, r: bestE.r });
-    else if (top.w === 0 && prior.maxW === 0 && maxReps > prior.maxReps) prs.push({ exId: wex.exId, type: 'reps', w: 0, r: maxReps });
-    else if (vol > prior.maxVol && prior.maxVol > 0) prs.push({ exId: wex.exId, type: 'volume', vol });
+    if (top.w > 0 && top.w > prior.maxW + 1e-9) {
+      prs.push({ exId: wex.exId, type: 'weight', w: top.w, r: top.r });
+      continue;
+    }
+    // Heaviest set that beat the rep record at its weight.
+    const repPRs = sets.filter((s) => setPRType({ ...s, done: true }, prior) === 'reps');
+    if (repPRs.length) {
+      const best = topSet(repPRs);
+      prs.push({ exId: wex.exId, type: 'reps', w: best.w || 0, r: best.r });
+    }
   }
   return prs;
 }
@@ -160,13 +142,8 @@ export function weeklyFor(exId) {
     }
     return [...map.values()].sort((a, b) => a.week - b.week).map((wk) => {
       const top = topSet(wk.sets);
-      let volume = 0; let reps = 0; let best = 0; let maxReps = 0;
-      for (const s of wk.sets) {
-        volume += setVolume(s); reps += s.r;
-        best = Math.max(best, e1rm(s.w, s.r));
-        maxReps = Math.max(maxReps, s.r);
-      }
-      return { ...wk, top, volume, reps, e1rm: best, maxReps };
+      const maxReps = Math.max(...wk.sets.map((s) => s.r));
+      return { ...wk, top, maxReps };
     });
   });
 }
@@ -177,14 +154,13 @@ export function weeklyTotals(n = 8) {
     const current = weekOf(Date.now());
     const weeks = [];
     for (let i = n - 1; i >= 0; i--) {
-      weeks.push({ week: weekOf(addDays(current, -7 * i)), volume: 0, workouts: 0, sets: 0, duration: 0 });
+      weeks.push({ week: weekOf(addDays(current, -7 * i)), workouts: 0, sets: 0, duration: 0 });
     }
     const byWeek = new Map(weeks.map((w) => [w.week, w]));
     for (const w of db.workouts) {
       const entry = byWeek.get(weekOf(w.start));
       if (!entry) continue;
       entry.workouts++;
-      entry.volume += workoutVolume(w);
       entry.sets += workoutSetCount(w);
       entry.duration += Math.max(0, (w.end || w.start) - w.start);
     }
@@ -266,11 +242,6 @@ export function suggestNext(exId, { excludeId, before, routineId = null, unit } 
   }
   if (top.r >= max) return { w: top.w, r: max, kind: 'allSets', range };
   return { w: top.w, r: Math.max(min, top.r + 1), kind: 'reps', range };
-}
-
-/** Recalculate stored records (e.g. after switching the 1RM formula). */
-export function recomputeAllPRs() {
-  for (const w of db.workouts) w.prs = computePRs(w);
 }
 
 // ---- Workout of the day ----------------------------------------------------------

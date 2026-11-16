@@ -3,16 +3,16 @@
 
 import { db, persist, commit, uid, exById, exName, routineById, workoutById } from './store.js';
 import {
-  esc, fmtClock, fmtDateLong, fmtTime, fmtSet, fmtVolume, fmtDuration, wInput, wVal,
-  parseNumber, fromUnit, fmtMonthDay, fmtDate, plural,
+  esc, fmtClock, fmtDateLong, fmtTime, fmtSet, fmtDuration, wInput, wVal,
+  parseNumber, fromUnit, fmtDate, plural,
 } from './format.js';
 import { icon } from './icons.js';
-import { openSheet, actionSheet, confirmAction, toast, navigate, goalText } from './ui.js';
+import { openSheet, actionSheet, confirmAction, toast, navigate, goalText, deltaChip } from './ui.js';
 import { pickExercises } from './picker.js';
 import { DEFAULT_REP_RANGE } from './data.js';
 import {
-  lastSession, bestsFor, setPRType, computePRs, suggestNext, topSet, workoutVolume,
-  workoutSetCount, PR_LABELS, doneSets,
+  lastSession, bestsFor, setPRType, computePRs, suggestNext, topSet,
+  workoutSetCount, prLabel, doneSets,
 } from './stats.js';
 
 let ctx = null; // { mode: 'active' | 'edit', draft, sheet, isNew }
@@ -187,7 +187,7 @@ function renderCard(wex) {
     return `<div class="set-row ${s.done ? 'done' : ''}" data-set="${i}">
       <div class="set-del-bg">${icon('trash', { size: 18 })}<span>Delete</span></div>
       <div class="set-inner">
-        <span class="set-num">${pr ? `<span class="pr-badge" title="${esc(PR_LABELS[pr])}">${icon('trophy', { size: 15, stroke: 2.2 })}</span>` : i + 1}</span>
+        <span class="set-num">${pr ? `<span class="pr-badge" title="${esc(prLabel({ type: pr, w: s.w }, u))}">${icon('trophy', { size: 15, stroke: 2.2 })}</span>` : i + 1}</span>
         <button class="set-prev" data-wk="fill" tabindex="-1">${prev ? esc(prev.w ? `${wVal(prev.w, u)} × ${prev.r}` : `${prev.r} reps`) : '—'}</button>
         <input class="set-in" data-f="w" inputmode="decimal" enterkeyhint="next" autocomplete="off" aria-label="Weight set ${i + 1}" value="${s.w != null ? wInput(s.w, u) : ''}" placeholder="${ph.w != null ? wInput(ph.w, u) : u}">
         <input class="set-in" data-f="r" inputmode="numeric" enterkeyhint="done" autocomplete="off" aria-label="Reps set ${i + 1}" value="${s.r ?? ''}" placeholder="${ph.r ?? 'reps'}">
@@ -364,7 +364,7 @@ const handlers = {
       set.done = true;
       if (ctx.mode === 'active') startRest();
       const pr = setPRType(set, cardContext(wex).bests);
-      if (pr) toast(`New record · ${PR_LABELS[pr]}`, { iconName: 'trophy' });
+      if (pr) toast(`New record · ${prLabel({ type: pr, w: set.w }, unit())}`, { iconName: 'trophy' });
     }
     save();
     rerenderCard(wex.id);
@@ -583,16 +583,26 @@ async function finishWorkout() {
 
 function showCompletion(w) {
   const u = unit();
-  const vol = workoutVolume(w);
-  const prev = db.workouts
-    .filter((x) => x.id !== w.id && x.start < w.start && (w.routineId ? x.routineId === w.routineId : x.name === w.name))
-    .sort((a, b) => b.start - a.start)[0];
-  const prevVol = prev ? workoutVolume(prev) : 0;
-  const change = prevVol ? Math.round(((vol - prevVol) / prevVol) * 100) : null;
-
+  // Compare each exercise's best set with the last time you did it.
+  let beaten = 0;
+  let compared = 0;
   const highlights = w.exercises.map((wex) => {
     const top = topSet(doneSets(wex));
-    return `<li><span>${esc(exName(wex.exId))}</span><span class="muted">${esc(plural(doneSets(wex).length, 'set'))} · best ${esc(fmtSet(top, u))}</span></li>`;
+    const prev = lastSession(wex.exId, { excludeId: w.id, before: w.start, routineId: w.routineId });
+    const prevTop = prev && topSet(prev.sets);
+    let chip = '';
+    if (prevTop) {
+      compared++;
+      const heavier = (top.w || 0) - (prevTop.w || 0);
+      if (Math.abs(heavier) > 1e-6) {
+        if (heavier > 0) beaten++;
+        chip = deltaChip(heavier, { format: (v) => `${wVal(v, u)} ${u}` });
+      } else {
+        if (top.r > prevTop.r) beaten++;
+        chip = deltaChip(top.r - prevTop.r, { format: (v) => plural(v, 'rep'), neutral: 'Same' });
+      }
+    }
+    return `<li><span class="done-ex"><span>${esc(exName(wex.exId))}</span><span class="muted">${esc(plural(doneSets(wex).length, 'set'))} · best ${esc(fmtSet(top, u))}</span></span>${chip}</li>`;
   }).join('');
 
   const sheet = openSheet({
@@ -604,14 +614,14 @@ function showCompletion(w) {
       <p class="muted">${esc(w.name)} · ${esc(fmtDateLong(w.start))}</p>
       <div class="stat-grid three">
         <div><span class="stat-label">Time</span><span class="stat-value">${esc(fmtDuration(w.end - w.start))}</span></div>
-        <div><span class="stat-label">Volume</span><span class="stat-value">${esc(fmtVolume(vol, u))}</span></div>
         <div><span class="stat-label">Sets</span><span class="stat-value">${workoutSetCount(w)}</span></div>
+        <div><span class="stat-label">Records</span><span class="stat-value">${w.prs.length}</span></div>
       </div>
-      ${change != null ? `<div class="done-compare ${change >= 0 ? 'up' : 'down'}">${icon(change >= 0 ? 'arrowUp' : 'arrowDown', { size: 16, stroke: 2.6 })}
-        <span>${change >= 0 ? `${change}% more volume` : `${Math.abs(change)}% less volume`} than last time (${esc(fmtMonthDay(prev.start))})</span></div>` : ''}
+      ${compared ? `<div class="done-compare ${beaten ? 'up' : 'down'}">${icon(beaten ? 'arrowUp' : 'check', { size: 16, stroke: 2.6 })}
+        <span>${beaten ? `You beat last time on ${beaten} of ${compared} exercises` : 'You matched last time. Next time, aim for one more rep.'}</span></div>` : ''}
       ${w.prs.length ? `<section class="card list"><h4 class="card-title">Personal records</h4>${w.prs.map((p) => `<div class="row pr-row">${icon('trophy', { size: 18, stroke: 2.2, cls: 'gold' })}
-          <span class="row-main"><span>${esc(exName(p.exId))}</span><span class="row-sub">${esc(PR_LABELS[p.type])}</span></span>
-          <span class="row-value">${esc(p.type === 'volume' ? fmtVolume(p.vol, u) : fmtSet(p, u))}</span></div>`).join('')}</section>` : ''}
+          <span class="row-main"><span>${esc(exName(p.exId))}</span><span class="row-sub">${esc(prLabel(p, u))}</span></span>
+          <span class="row-value">${esc(fmtSet(p, u))}</span></div>`).join('')}</section>` : ''}
       <section class="card list"><h4 class="card-title">Exercises</h4><ul class="done-list">${highlights}</ul></section>
       <p class="footnote baseline-note">${icon('check', { size: 14, stroke: 2.6 })} Saved. These sets are your baseline for next time.</p>
       ${!w.routineId ? '<button class="btn tinted wide" data-done="routine">Save as Routine</button>' : ''}

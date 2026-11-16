@@ -71,11 +71,6 @@ export function fmtSet(set, unit, { short = false } = {}) {
   return short ? `${wVal(set.w, unit)} × ${set.r}` : `${wVal(set.w, unit)} ${unit} × ${set.r}`;
 }
 
-export function fmtVolume(kg, unit) {
-  const v = toUnit(kg, unit) || 0;
-  return `${v >= 100000 ? nf(1, true).format(v) : nf(0).format(v)} ${unit}`;
-}
-
 export function fmtCompact(v) {
   return Math.abs(v) >= 10000 ? nf(1, true).format(v) : nf(v < 10 ? 1 : 0).format(v);
 }

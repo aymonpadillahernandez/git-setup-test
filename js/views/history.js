@@ -2,14 +2,14 @@
 
 import { db, exName, workoutById } from '../store.js';
 import {
-  esc, fmtWeekLabel, fmtVolume, fmtDuration, fmtWeekday, fmtDayNum, fmtDateLong, fmtTime,
+  esc, fmtWeekLabel, fmtDuration, fmtWeekday, fmtDayNum, fmtDateLong, fmtTime,
   fmtSet, fmtMonthDay, wVal, plural,
 } from '../format.js';
 import { icon } from '../icons.js';
 import { onAction, emptyState, deltaChip, toast } from '../ui.js';
 import {
-  workoutsDesc, weekOf, workoutVolume, workoutSetCount, doneSets, topSet, lastSession,
-  bestsFor, setPRType, PR_LABELS, setVolume,
+  workoutsDesc, weekOf, workoutSetCount, doneSets, topSet, lastSession,
+  bestsFor, setPRType, prLabel,
 } from '../stats.js';
 import { editWorkout, saveAsRoutine, startWorkout } from '../workout.js';
 
@@ -25,13 +25,13 @@ export function historyView() {
   }
 
   const body = groups.length ? groups.map((g) => {
-    const vol = g.items.reduce((v, w) => v + workoutVolume(w), 0);
+    const sets = g.items.reduce((n, w) => n + workoutSetCount(w), 0);
     return `<div class="section-head"><h2>${esc(fmtWeekLabel(g.week, db.settings.weekStart))}</h2>
-        <span class="section-note">${plural(g.items.length, 'workout')} · ${esc(fmtVolume(vol, u))}</span></div>
+        <span class="section-note">${plural(g.items.length, 'workout')} · ${plural(sets, 'set')}</span></div>
       <section class="card list">${g.items.map((w) => `<a class="row hist-row" href="#/history/${esc(w.id)}">
           <span class="date-badge"><span class="dow">${esc(fmtWeekday(w.start).toUpperCase())}</span><span class="dnum">${esc(fmtDayNum(w.start))}</span></span>
           <span class="row-main"><span class="row-title">${esc(w.name)}</span>
-            <span class="row-sub">${esc(fmtDuration((w.end || w.start) - w.start))} · ${plural(workoutSetCount(w), 'set')} · ${esc(fmtVolume(workoutVolume(w), u))}</span></span>
+            <span class="row-sub">${esc(fmtDuration((w.end || w.start) - w.start))} · ${plural(workoutSetCount(w), 'set')} · ${plural(w.exercises.filter((x) => doneSets(x).length).length, 'exercise')}</span></span>
           ${w.prs?.length ? `<span class="pr-count" aria-label="${w.prs.length} records">${icon('trophy', { size: 15, stroke: 2.2 })}${w.prs.length}</span>` : ''}
           ${icon('chevronRight', { size: 16, stroke: 2.4, cls: 'chev' })}
         </a>`).join('')}</section>`;
@@ -71,15 +71,14 @@ export function workoutDetailView(id) {
       }
     }
     const pr = prsByEx.get(wex.exId);
-    const vol = sets.reduce((v, s) => v + setVolume(s), 0);
     return `<section class="card ex-detail">
       <a class="ex-detail-head" href="#/progress/${esc(wex.exId)}">
         <span class="row-main"><span class="row-title">${esc(exName(wex.exId))}</span>
-        <span class="row-sub">${plural(sets.length, 'set')}${vol ? ` · ${esc(fmtVolume(vol, u))}` : ''}</span></span>
+        <span class="row-sub">${plural(sets.length, 'set')} · best ${esc(fmtSet(top, u))}</span></span>
         ${icon('chart', { size: 18, cls: 'accent' })}
       </a>
       ${compare ? `<div class="ex-compare">${compare}</div>` : ''}
-      ${pr ? `<div class="ex-pr">${icon('trophy', { size: 15, stroke: 2.2 })} ${esc(PR_LABELS[pr.type])}</div>` : ''}
+      ${pr ? `<div class="ex-pr">${icon('trophy', { size: 15, stroke: 2.2 })} ${esc(prLabel(pr, u))}</div>` : ''}
       <ol class="set-list">${sets.map((s, i) => {
         const isPr = setPRType(s, bests);
         return `<li><span class="set-num">${i + 1}</span><span class="set-val">${esc(fmtSet(s, u))}</span>${isPr ? `<span class="set-pr">${icon('trophy', { size: 13, stroke: 2.4 })}</span>` : ''}</li>`;
@@ -92,9 +91,8 @@ export function workoutDetailView(id) {
     eyebrow: `${fmtDateLong(w.start)} · ${fmtTime(w.start)}`.toUpperCase(),
     back: { href: 'history', label: 'History' },
     right: `<button class="nav-btn" data-action="edit-workout" data-id="${esc(w.id)}">Edit</button>`,
-    body: `<div class="stat-grid four card">
+    body: `<div class="stat-grid three card">
         <div><span class="stat-label">Time</span><span class="stat-value">${esc(fmtDuration((w.end || w.start) - w.start))}</span></div>
-        <div><span class="stat-label">Volume</span><span class="stat-value">${esc(fmtVolume(workoutVolume(w), u))}</span></div>
         <div><span class="stat-label">Sets</span><span class="stat-value">${workoutSetCount(w)}</span></div>
         <div><span class="stat-label">Records</span><span class="stat-value">${(w.prs || []).length}</span></div>
       </div>

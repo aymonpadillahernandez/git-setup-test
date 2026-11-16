@@ -1,16 +1,16 @@
 // Today tab: the workout of the day (with last session's numbers and today's
-// targets), this week at a glance, weekly volume trend and recent records.
+// targets), this week at a glance, workouts per week and recent records.
 
 import { db, exName, exById, persist } from '../store.js';
 import {
-  esc, fmtDateLong, fmtDate, fmtVolume, fmtMonthDay, fmtWeekLabel, fmtCompact, toUnit, fmtSet,
+  esc, fmtDateLong, fmtDate, fmtMonthDay, fmtWeekLabel, fmtNumber, fmtSet,
   fmtRelativeDay, plural, fmtDuration, fmtClock, wVal,
 } from '../format.js';
 import { icon } from '../icons.js';
 import { chartSlot, rings } from '../charts.js';
 import {
-  weeklyTotals, goalStreak, recentPRs, PR_LABELS, todayPlan, lastSession, suggestNext, topSet,
-  doneSets, workoutVolume, workoutsDesc,
+  weeklyTotals, goalStreak, recentPRs, prLabel, todayPlan, lastSession, suggestNext, topSet,
+  doneSets, workoutSetCount, workoutsDesc,
 } from '../stats.js';
 import { onAction, emptyState, deltaChip } from '../ui.js';
 import { startWorkout, openWorkoutSheet } from '../workout.js';
@@ -101,7 +101,7 @@ function todayCard(plan, u) {
         <span class="te-last">${esc(setsLine(sets, u))}</span></span>${delta}</a>`;
     }).join('');
     return `<section class="card today-card">${strip}
-      ${head(`${icon('check', { size: 13, stroke: 3 })} Completed today`, w.name, `${esc(fmtDuration((w.end || w.start) - w.start))} · ${esc(fmtVolume(workoutVolume(w), u))}${w.prs?.length ? ` · ${plural(w.prs.length, 'record')}` : ''}`, 'done')}
+      ${head(`${icon('check', { size: 13, stroke: 3 })} Completed today`, w.name, `${esc(fmtDuration((w.end || w.start) - w.start))} · ${plural(workoutSetCount(w), 'set')}${w.prs?.length ? ` · ${plural(w.prs.length, 'record')}` : ''}`, 'done')}
       <div class="today-cols"><span>Logged today (${esc(u)} × reps)</span><span>vs last time</span></div>
       <div class="today-list">${rows}</div>
       <p class="today-note">${icon('check', { size: 13, stroke: 2.8 })} Saved as your baseline for next time.</p>
@@ -165,15 +165,12 @@ export function todayView() {
   const hasAny = db.workouts.length > 0;
   const plan = todayPlan();
 
-  const volTarget = prev.volume;
-  const volProgress = volTarget ? now.volume / volTarget : 0;
   const workoutsLeft = Math.max(0, goal - now.workouts);
 
   let message;
   if (!hasAny) message = 'Log your first workout to start your streak.';
-  else if (workoutsLeft === 0 && volTarget && now.volume > volTarget) message = 'Goal reached and you beat last week’s volume. Outstanding.';
-  else if (workoutsLeft === 0) message = volTarget ? `Weekly goal reached. ${fmtVolume(volTarget - now.volume, u)} more to beat last week.` : 'Weekly goal reached. Keep it rolling.';
-  else if (volTarget && now.volume > volTarget) message = `Already past last week’s volume. ${plural(workoutsLeft, 'more workout')} to hit your goal.`;
+  else if (workoutsLeft === 0 && now.workouts > goal) message = `Goal beaten: ${now.workouts} workouts this week. Outstanding.`;
+  else if (workoutsLeft === 0) message = 'Weekly goal reached. Every extra session is a bonus.';
   else message = `${plural(workoutsLeft, 'more workout')} to hit your goal this week.`;
 
   const installHint = !document.documentElement.classList.contains('standalone') && /iPhone|iPad|iPod/.test(navigator.userAgent) && !db.meta.hideInstall
@@ -188,24 +185,16 @@ export function todayView() {
   const weekCard = `<div class="section-head"><h2>This week</h2></div>
     <section class="card week-card">
       <div class="week-top">
-        <div class="week-rings">${rings([
-          { value: now.workouts / goal, cls: 'r1' },
-          { value: volProgress, cls: 'r2' },
-        ])}</div>
+        <div class="week-rings">${rings([{ value: now.workouts / goal, cls: 'r1' }], { size: 96, stroke: 14 })}</div>
         <div class="week-stats">
           <div class="ring-stat">
             <span class="ring-key r1"></span>
             <span class="ring-label">Workouts</span>
             <span class="ring-value">${now.workouts}<span class="of">/${goal}</span></span>
           </div>
-          <div class="ring-stat">
-            <span class="ring-key r2"></span>
-            <span class="ring-label">${volTarget ? 'Volume vs last week' : 'Volume this week'}</span>
-            <span class="ring-value">${esc(fmtCompact(toUnit(now.volume, u)))}<span class="of">${volTarget ? `/${esc(fmtCompact(toUnit(volTarget, u)))}` : ''} ${esc(u)}</span></span>
-          </div>
+          <p class="week-line">${esc(message)}</p>
         </div>
       </div>
-      <p class="week-msg">${esc(message)}</p>
     </section>`;
 
   const tiles = `<div class="tiles">
@@ -215,28 +204,28 @@ export function todayView() {
     </div>`;
 
   const chart = hasAny ? `<section class="card">
-      <div class="card-head"><h4 class="card-title">Weekly volume</h4><a class="card-link" href="#/history">History</a></div>
+      <div class="card-head"><h4 class="card-title">Workouts per week</h4><a class="card-link" href="#/history">History</a></div>
       ${chartSlot({
         type: 'columns',
-        height: 170,
-        fmtY: (v) => fmtCompact(v),
-        valueLabel: now.volume ? fmtCompact(toUnit(now.volume, u)) : '',
+        height: 150,
+        fmtY: (v) => fmtNumber(v),
+        valueLabel: now.workouts ? String(now.workouts) : '',
         bars: weeks.map((w, i) => ({
           label: i === weeks.length - 1 ? 'Now' : fmtMonthDay(w.week),
-          value: toUnit(w.volume, u),
+          value: w.workouts,
           highlight: i === weeks.length - 1,
-          tip: [fmtVolume(w.volume, u), `${fmtWeekLabel(w.week, db.settings.weekStart)} · ${plural(w.workouts, 'workout')}`],
+          tip: [plural(w.workouts, 'workout'), `${fmtWeekLabel(w.week, db.settings.weekStart)} · ${plural(w.sets, 'set')}`],
         })),
-      }, { label: `Weekly volume for the last 8 weeks. This week ${fmtVolume(now.volume, u)}, last week ${fmtVolume(prev.volume, u)}.` })}
-      <table class="sr-only"><caption>Weekly volume</caption><tbody>${weeks.map((w) => `<tr><th>${esc(fmtWeekLabel(w.week, db.settings.weekStart))}</th><td>${esc(fmtVolume(w.volume, u))}</td><td>${plural(w.workouts, 'workout')}</td></tr>`).join('')}</tbody></table>
+      }, { label: `Workouts per week for the last 8 weeks. This week ${now.workouts}, last week ${prev.workouts}.` })}
+      <table class="sr-only"><caption>Workouts per week</caption><tbody>${weeks.map((w) => `<tr><th>${esc(fmtWeekLabel(w.week, db.settings.weekStart))}</th><td>${plural(w.workouts, 'workout')}</td><td>${plural(w.sets, 'set')}</td></tr>`).join('')}</tbody></table>
     </section>` : '';
 
   const prs = recentPRs(5);
   const records = prs.length ? `<div class="section-head"><h2>Recent records</h2></div>
     <section class="card list">${prs.map((p) => `<a class="row" href="#/progress/${esc(p.exId)}">
         <span class="row-icon gold">${icon('trophy', { size: 18, stroke: 2.2 })}</span>
-        <span class="row-main"><span class="row-title">${esc(exName(p.exId))}</span><span class="row-sub">${esc(PR_LABELS[p.type])} · ${esc(fmtRelativeDay(p.date))}</span></span>
-        <span class="row-value">${esc(p.type === 'volume' ? fmtVolume(p.vol, u) : fmtSet(p, u))}</span>
+        <span class="row-main"><span class="row-title">${esc(exName(p.exId))}</span><span class="row-sub">${esc(prLabel(p, u))} · ${esc(fmtRelativeDay(p.date))}</span></span>
+        <span class="row-value">${esc(fmtSet(p, u))}</span>
         ${icon('chevronRight', { size: 16, stroke: 2.4, cls: 'chev' })}
       </a>`).join('')}</section>` : '';
 
