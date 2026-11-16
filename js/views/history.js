@@ -39,7 +39,7 @@ export function historyView() {
     iconName: 'history',
     title: 'No workouts yet',
     text: 'Finished workouts show up here, grouped by week.',
-    button: '<a class="btn tinted" href="#/workout">Start a Workout</a>',
+    button: '<a class="btn tinted" href="#/plan">Start a Workout</a>',
   });
 
   return {

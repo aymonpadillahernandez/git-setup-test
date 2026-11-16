@@ -14,9 +14,9 @@ export function showOnboarding() {
         <img class="onb-icon" src="icons/icon-180.png" alt="" width="84" height="84">
         <h1>Welcome to Lift</h1>
         <ul class="onb-features">
-          <li><span class="onb-fi blue">${icon('list', { size: 30, stroke: 2.2 })}</span><div><strong>Log every set in seconds</strong><p>Last session’s weight and reps are pre-filled. Tap ✓ and move on.</p></div></li>
-          <li><span class="onb-fi orange">${icon('chart', { size: 30, stroke: 2.2 })}</span><div><strong>See your progress week by week</strong><p>Every exercise gets a chart and a week-by-week log of weight and reps.</p></div></li>
-          <li><span class="onb-fi gold">${icon('trophy', { size: 30, stroke: 2.2 })}</span><div><strong>Always know what to beat</strong><p>Get a target for every exercise, and a trophy when you set a record.</p></div></li>
+          <li><span class="onb-fi blue">${icon('calendar', { size: 30, stroke: 2.2 })}</span><div><strong>Today’s workout, ready to go</strong><p>Plan your week once. Each day opens on that day’s workout with last week’s weight and reps.</p></div></li>
+          <li><span class="onb-fi orange">${icon('chart', { size: 30, stroke: 2.2 })}</span><div><strong>See every exercise evolve</strong><p>Charts for weight, reps and estimated strength, plus a week-by-week log of every set.</p></div></li>
+          <li><span class="onb-fi gold">${icon('trophy', { size: 30, stroke: 2.2 })}</span><div><strong>Always know what to beat</strong><p>Today’s session becomes next time’s baseline. Lift sets a target to beat and celebrates every record.</p></div></li>
         </ul>
       </div>
       <div class="onb-foot"><button class="btn filled wide big" data-onb="next">Continue</button></div>
@@ -44,7 +44,7 @@ export function showOnboarding() {
             <span class="row-main"><span class="row-title">I’ll build my own</span><span class="row-sub">Start with an empty list</span></span>
             <span class="radio-dot">${icon('check', { size: 14, stroke: 3 })}</span></button>
         </section>
-        <p class="footnote">You can edit routines, units and your goal any time.</p>
+        <p class="footnote">You can change routines, days, units and your goal any time in Plan and Settings.</p>
       </div>
       <div class="onb-foot"><button class="btn filled wide big" data-onb="done">Get Started</button></div>
     </div>`;
@@ -59,7 +59,11 @@ export function showOnboarding() {
     if (kind === 'next') { sheet.setContent(setup()); return; }
     if (kind === 'unit') choice.unit = b.dataset.v;
     if (kind === 'goal') choice.goal = Math.max(1, Math.min(7, choice.goal + Number(b.dataset.d)));
-    if (kind === 'program') choice.program = b.dataset.v;
+    if (kind === 'program') {
+      choice.program = b.dataset.v;
+      const p = STARTER_PROGRAMS[choice.program];
+      if (p) choice.goal = new Set(p.routines.flatMap(([, days]) => days)).size;
+    }
     if (kind === 'done') {
       db.settings.unit = choice.unit;
       db.settings.weeklyGoal = choice.goal;

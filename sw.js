@@ -1,7 +1,7 @@
 // Offline support: serve the app shell from cache, refresh it in the background.
 // Bump VERSION whenever app files change so phones pick up the new build.
 
-const VERSION = 'lift-v1';
+const VERSION = 'lift-v2';
 const SHELL = [
   './',
   'index.html',
@@ -22,7 +22,7 @@ const SHELL = [
   'js/views/progress.js',
   'js/views/routines.js',
   'js/views/settings.js',
-  'js/views/summary.js',
+  'js/views/today.js',
   'icons/icon-180.png',
   'icons/icon-192.png',
   'icons/icon-512.png',

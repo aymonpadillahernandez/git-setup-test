@@ -8,10 +8,10 @@ import {
 } from '../format.js';
 import { icon } from '../icons.js';
 import { chartSlot, sparkline } from '../charts.js';
-import { onAction, onInput, emptyState, deltaChip, segmented } from '../ui.js';
-import { trainedExercises, weeklyFor, bestsFor, suggestNext, weekOf } from '../stats.js';
+import { onAction, onInput, emptyState, deltaChip, segmented, goalText } from '../ui.js';
+import { trainedExercises, weeklyFor, bestsFor, suggestNext, weekOf, sessionsFor, FORMULAS, e1rm } from '../stats.js';
 
-const prefs = { metric: {}, range: '6m' };
+const prefs = { range: '6m' };
 
 function relWeek(week) {
   const label = fmtWeekLabel(week, db.settings.weekStart);
@@ -39,7 +39,7 @@ export function progressView() {
         iconName: 'chart',
         title: 'Nothing to chart yet',
         text: 'After your first workout, every exercise gets its own page with your weight and reps week by week.',
-        button: '<a class="btn tinted" href="#/workout">Start a Workout</a>',
+        button: '<a class="btn tinted" href="#/plan">Start a Workout</a>',
       }),
     };
   }
@@ -82,16 +82,41 @@ onInput('prog-search', (el) => {
 });
 
 // ---- Exercise page -----------------------------------------------------------------
-
-const METRICS = {
-  weight: { label: 'Weight', title: 'Heaviest set each week' },
-  e1rm: { label: 'Est. 1RM', title: 'Estimated one-rep max each week' },
-  volume: { label: 'Volume', title: 'Total volume each week' },
-  reps: { label: 'Reps', title: 'Most reps in one set each week' },
-  total: { label: 'Total Reps', title: 'Total reps each week' },
-};
+// One range filter scopes every chart below it. Weight and reps get their own small
+// charts that sit side by side on the same weeks (never a dual-axis chart), and
+// estimated 1RM combines the two into a single strength trend.
 
 const RANGES = [['3m', '3M', 13], ['6m', '6M', 26], ['1y', '1Y', 52], ['all', 'All', Infinity]];
+
+function lineSpec(weeks, { value, tip, fmtY, endLabel, height, compact = false }) {
+  const spanDays = weeks.length ? (weeks[weeks.length - 1].week - weeks[0].week) / 864e5 : 0;
+  return {
+    type: 'line',
+    height,
+    compact,
+    points: weeks.map((w) => ({ x: w.week, y: value(w), tip: tip(w) })),
+    fmtY,
+    fmtX: (ms) => (spanDays > 200 ? fmtMonth(ms) : fmtMonthDay(ms)),
+    endLabel,
+  };
+}
+
+/** Weekly volume including empty weeks, so gaps in training are visible. */
+function volumeBars(weeks, u) {
+  if (!weeks.length) return [];
+  const byWeek = new Map(weeks.map((w) => [w.week, w]));
+  const bars = [];
+  for (let wk = weeks[0].week; wk <= weeks[weeks.length - 1].week; wk = weekOf(addDays(wk, 7))) {
+    const w = byWeek.get(wk);
+    bars.push({
+      label: fmtMonthDay(wk),
+      value: toUnit(w?.volume || 0, u),
+      highlight: wk === weeks[weeks.length - 1].week,
+      tip: [w ? fmtVolume(w.volume, u) : 'No sessions', `Week of ${fmtMonthDay(wk)}${w ? ` · ${plural(w.sets.length, 'set')}` : ''}`],
+    });
+  }
+  return bars;
+}
 
 export function exerciseProgressView(exId) {
   const ex = exById(exId);
@@ -105,60 +130,87 @@ export function exerciseProgressView(exId) {
   }
 
   const bw = isBodyweight(all);
-  const metricKeys = bw ? ['reps', 'total'] : ['weight', 'e1rm', 'volume', 'reps'];
-  const metric = metricKeys.includes(prefs.metric[exId]) ? prefs.metric[exId] : metricKeys[0];
   const [, , rangeWeeks] = RANGES.find(([k]) => k === prefs.range) || RANGES[1];
   const since = rangeWeeks === Infinity ? -Infinity : weekOf(addDays(Date.now(), -7 * (rangeWeeks - 1)));
   const weeks = all.filter((w) => w.week >= since);
+  const first = weeks[0];
+  const latest = weeks[weeks.length - 1];
 
   const cur = all[all.length - 1];
   const prev = all[all.length - 2];
   const bests = bestsFor(exId);
-  const next = suggestNext(exId, { unit: u });
+  const recentRoutine = sessionsFor(exId)[0]?.workout.routineId || null;
+  const next = suggestNext(exId, { unit: u, routineId: recentRoutine });
+  const formula = FORMULAS[db.settings.formula] || FORMULAS.epley;
+  const fmtW = (v) => `${fmtNumber(v, u === 'lb' ? 1 : 2)} ${u}`;
+  const fmtE = (kg) => `${fmtNumber(toUnit(kg, u))} ${u}`; // est. 1RM: whole numbers
 
   // ---- Hero
   const hero = `<section class="card hero-card">
       <div class="hero-label">${esc(fmtWeekLabel(cur.week, db.settings.weekStart))} · top set</div>
       <div class="hero-value">${esc(fmtSet(cur.top, u))}</div>
       <div class="hero-delta">${prev ? `${topSetDelta(cur.top, prev.top, u)}<span>vs ${esc(relWeek(prev.week))}</span>` : '<span>Your first week. This is your baseline.</span>'}</div>
-      ${next ? `<div class="hero-next">${icon('target', { size: 16, stroke: 2.2 })}<span>Next time, go for <strong>${esc(fmtSet(next, u))}</strong></span></div>` : ''}
+      ${next ? `<div class="hero-next">${icon('target', { size: 16, stroke: 2.2 })}<span class="goal-text">${goalText(next, u)}</span>${bw ? '' : `<span class="goal-range">${next.range[0]}–${next.range[1]} reps</span>`}</div>` : ''}
     </section>`;
 
-  // ---- Chart
-  const value = (w) => ({
-    weight: toUnit(w.top.w, u),
-    e1rm: toUnit(w.e1rm, u),
-    volume: toUnit(w.volume, u),
-    reps: w.maxReps,
-    total: w.reps,
-  }[metric]);
-  const fmtValue = (v) => ({
-    weight: `${fmtNumber(v, u === 'lb' ? 1 : 2)} ${u}`,
-    e1rm: `${fmtCompact(v)} ${u}`,
-    volume: `${fmtCompact(v)} ${u}`,
-    reps: plural(v, 'rep'),
-    total: plural(v, 'rep'),
-  }[metric]);
-  const tipFor = (w) => {
-    const when = `Week of ${fmtMonthDay(w.week)}`;
-    switch (metric) {
-      case 'weight': return [fmtSet(w.top, u), when];
-      case 'e1rm': return [`${fmtCompact(toUnit(w.e1rm, u))} ${u}`, `${when} · est. 1RM`];
-      case 'volume': return [fmtVolume(w.volume, u), `${when} · ${plural(w.sets.length, 'set')}`];
-      default: return [plural(value(w), 'rep'), when];
-    }
-  };
-  const spanDays = weeks.length ? (weeks[weeks.length - 1].week - weeks[0].week) / 864e5 : 0;
-  const chartHtml = weeks.length
-    ? chartSlot({
-      type: 'line',
-      height: 220,
-      points: weeks.map((w) => ({ x: w.week, y: value(w), tip: tipFor(w) })),
-      fmtY: (v) => fmtCompact(v),
-      fmtX: (ms) => (spanDays > 200 ? fmtMonth(ms) : fmtMonthDay(ms)),
-      endLabel: fmtValue(value(weeks[weeks.length - 1])),
-    }, { label: `${METRICS[metric].title}. Latest: ${fmtValue(value(weeks[weeks.length - 1]))}. The weekly table below lists every value.` })
-    : '<p class="chart-empty">No sessions in this time range.</p>';
+  // ---- Range filter (scopes everything below)
+  const filter = `<div class="filter-row range-filter">${segmented('range', RANGES.map(([k, l]) => [k, l]), prefs.range, { action: 'prog-range' })}</div>`;
+
+  // ---- Stat tiles for the selected range
+  const change = (a, b) => (a && b && weeks.length > 1 ? ((b - a) / a) * 100 : null);
+  const strengthChange = bw ? change(first?.maxReps, latest?.maxReps) : change(first?.e1rm, latest?.e1rm);
+  const sessionsInRange = weeks.reduce((n, w) => n + w.sessions.length, 0);
+  const tiles = weeks.length ? `<div class="tiles">
+      <div class="tile"><span class="tile-label">${bw ? 'Best set' : 'Est. 1RM'}</span><span class="tile-value">${esc(bw ? plural(latest.maxReps, 'rep') : `${fmtCompact(toUnit(latest.e1rm, u))} ${u}`)}</span><span class="tile-label">latest week</span></div>
+      <div class="tile"><span class="tile-label">${bw ? 'Reps' : 'Strength'}</span><span class="tile-value">${strengthChange == null ? '—' : `${strengthChange >= 0 ? '+' : '−'}${fmtNumber(Math.abs(strengthChange), Math.abs(strengthChange) < 10 ? 1 : 0)}%`}</span><span class="tile-label">${strengthChange == null ? 'need 2+ weeks' : `since ${esc(fmtMonthDay(first.week))}`}</span></div>
+      <div class="tile"><span class="tile-label">Sessions</span><span class="tile-value">${sessionsInRange}</span><span class="tile-label">${esc(plural(weeks.length, 'week'))} trained</span></div>
+    </div>` : '';
+
+  const empty = '<p class="chart-empty">No sessions in this time range.</p>';
+  const when = (w) => `Week of ${fmtMonthDay(w.week)}`;
+
+  // ---- Strength (est. 1RM): weight and reps combined
+  const strengthCard = bw ? '' : `<section class="card chart-card">
+      <div class="card-head"><h4 class="card-title">Strength · estimated 1RM</h4></div>
+      <p class="card-sub">Weight and reps combined into one number, best set each week</p>
+      ${weeks.length ? chartSlot(lineSpec(weeks, {
+        height: 200,
+        value: (w) => toUnit(w.e1rm, u),
+        tip: (w) => [fmtE(w.e1rm), `${when(w)} · from ${fmtSet(w.sets.reduce((a, b) => (e1rm(b.w, b.r) > e1rm(a.w, a.r) ? b : a)), u)}`],
+        fmtY: (v) => fmtCompact(v),
+        endLabel: fmtE(latest.e1rm),
+      }), { label: `Estimated one-rep max per week, latest ${fmtE(latest.e1rm)}. Values are listed in the week-by-week table.` }) : empty}
+      <p class="formula-note">${esc(formula.label)} formula: est. 1RM = ${esc(formula.text)}</p>
+    </section>`;
+
+  // ---- Weight & reps as small multiples (same weeks, separate scales)
+  const weightRepsCard = `<section class="card chart-card">
+      <div class="card-head"><h4 class="card-title">${bw ? 'Reps' : 'Weight & reps'}</h4></div>
+      <p class="card-sub">${bw ? 'Best set and total reps each week' : 'Your heaviest set each week'}</p>
+      ${weeks.length ? (bw ? `
+        <div class="mini-label">Best set</div>
+        ${chartSlot(lineSpec(weeks, { height: 140, compact: true, value: (w) => w.maxReps, tip: (w) => [plural(w.maxReps, 'rep'), when(w)], fmtY: (v) => fmtNumber(v), endLabel: plural(latest.maxReps, 'rep') }), { label: 'Most reps in one set per week' })}
+        <div class="mini-label">Total reps</div>
+        ${chartSlot(lineSpec(weeks, { height: 140, compact: true, value: (w) => w.reps, tip: (w) => [plural(w.reps, 'rep'), `${when(w)} · ${plural(w.sets.length, 'set')}`], fmtY: (v) => fmtNumber(v), endLabel: plural(latest.reps, 'rep') }), { label: 'Total reps per week' })}`
+      : `
+        <div class="mini-label">Weight (${esc(u)})</div>
+        ${chartSlot(lineSpec(weeks, { height: 150, compact: true, value: (w) => toUnit(w.top.w, u), tip: (w) => [fmtSet(w.top, u), when(w)], fmtY: (v) => fmtCompact(v), endLabel: fmtW(toUnit(latest.top.w, u)) }), { label: `Top set weight per week, latest ${fmtW(toUnit(latest.top.w, u))}` })}
+        <div class="mini-label">Reps (on that set)</div>
+        ${chartSlot(lineSpec(weeks, { height: 130, compact: true, value: (w) => w.top.r, tip: (w) => [plural(w.top.r, 'rep'), `${when(w)} · at ${fmtW(toUnit(w.top.w, u))}`], fmtY: (v) => fmtNumber(v), endLabel: plural(latest.top.r, 'rep') }), { label: `Reps on the top set per week, latest ${latest.top.r}` })}`) : empty}
+    </section>`;
+
+  // ---- Volume
+  const volumeCard = bw ? '' : `<section class="card chart-card">
+      <div class="card-head"><h4 class="card-title">Volume</h4></div>
+      <p class="card-sub">Sets × reps × weight, each week</p>
+      ${weeks.length ? chartSlot({
+        type: 'columns',
+        height: 160,
+        fmtY: (v) => fmtCompact(v),
+        valueLabel: fmtCompact(toUnit(latest.volume, u)),
+        bars: volumeBars(weeks, u),
+      }, { label: `Weekly volume, latest ${fmtVolume(latest.volume, u)}` }) : empty}
+    </section>`;
 
   // ---- Records
   const records = bw
@@ -173,27 +225,20 @@ export function exerciseProgressView(exId) {
       ['Best session volume', fmtVolume(bests.maxVol, u), bests.maxVolDate],
     ];
 
-  // ---- Week by week (newest first)
+  // ---- Week by week (newest first): every set's weight × reps
   const weekRows = [...all].reverse().map((w, i, arr) => {
     const older = arr[i + 1];
     return `<div class="row wk-row">
       <span class="row-main"><span class="row-title">${esc(fmtWeekRange(w.week))}</span>
-        <span class="row-sub sets-line">${esc(w.sets.map((s) => (s.w ? `${wVal(s.w, u)}×${s.r}` : `${s.r}`)).join('  ·  '))}</span></span>
+        <span class="row-sub sets-line">${esc(w.sets.map((x) => (x.w ? `${wVal(x.w, u)}×${x.r}` : `${x.r}`)).join('  ·  '))}</span>
+        ${bw ? '' : `<span class="row-sub wk-stats">1RM ${esc(fmtCompact(toUnit(w.e1rm, u)))} · vol ${esc(fmtVolume(w.volume, u))}</span>`}</span>
       <span class="wk-right"><span class="row-value">${esc(fmtSet(w.top, u))}</span>${older ? topSetDelta(w.top, older.top, u) : ''}</span>
     </div>`;
   }).join('');
 
   return {
     ...base,
-    body: `${hero}
-      <div class="filter-row">
-        ${segmented(`metric:${exId}`, metricKeys.map((k) => [k, METRICS[k].label]), metric, { action: 'prog-metric' })}
-      </div>
-      <section class="card chart-card">
-        <div class="card-head"><h4 class="card-title">${esc(METRICS[metric].title)}</h4></div>
-        <div class="range-row">${RANGES.map(([k, label]) => `<button class="chip small ${k === prefs.range ? 'on' : ''}" data-action="prog-range" data-value="${k}">${label}</button>`).join('')}</div>
-        ${chartHtml}
-      </section>
+    body: `${hero}${filter}${tiles}${strengthCard}${weightRepsCard}${volumeCard}
       <div class="section-head"><h2>Personal records</h2></div>
       <div class="record-grid">${records.map(([label, val, date]) => `<div class="record">
           <span class="record-label">${esc(label)}</span>
@@ -204,12 +249,6 @@ export function exerciseProgressView(exId) {
       <section class="card list">${weekRows}</section>`,
   };
 }
-
-onAction('prog-metric', (el) => {
-  const exId = el.dataset.name.split(':')[1];
-  prefs.metric[exId] = el.dataset.value;
-  document.dispatchEvent(new Event('rerender'));
-});
 
 onAction('prog-range', (el) => {
   prefs.range = el.dataset.value;

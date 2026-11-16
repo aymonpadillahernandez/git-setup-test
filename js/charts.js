@@ -105,7 +105,7 @@ function showTip(el, tip, x, lines) {
 function drawLine(el, spec, width) {
   const pts = spec.points;
   const height = spec.height || 210;
-  const pad = { t: 34, r: 44, b: 26, l: 4 };
+  const pad = { t: spec.compact ? 24 : 34, r: 44, b: 26, l: 4 };
   const plotW = width - pad.l - pad.r;
   const plotH = height - pad.t - pad.b;
 
@@ -213,7 +213,8 @@ function drawColumns(el, spec, width) {
   const slot = plotW / bars.length;
   const bw = Math.min(24, slot * 0.62);
   const sy = (v) => pad.t + plotH - (v / top) * plotH;
-  const everyOther = slot < 40;
+  // Thin the x labels so they never collide; always keep the latest bar's label.
+  const labelStep = Math.max(1, Math.ceil(bars.length / Math.max(2, Math.floor(plotW / 52))));
 
   const rects = bars.map((b, i) => {
     const x = pad.l + i * slot + (slot - bw) / 2;
@@ -225,7 +226,7 @@ function drawColumns(el, spec, width) {
     <g class="grid">${ticks.map((t) => `<line x1="${pad.l}" x2="${pad.l + plotW}" y1="${sy(t).toFixed(1)}" y2="${sy(t).toFixed(1)}"/>`).join('')}</g>
     <g class="axis-y">${ticks.map((t) => `<text x="${width - 2}" y="${(sy(t) + 4).toFixed(1)}" text-anchor="end">${esc(spec.fmtY(t))}</text>`).join('')}</g>
     ${rects.map((r, i) => `<path class="bar ${bars[i].highlight ? 'hl' : ''}" data-i="${i}" d="${roundedTopRect(r.x, r.y, bw, r.h, 4)}"/>`).join('')}
-    <g class="axis-x">${bars.map((b, i) => (everyOther && (bars.length - 1 - i) % 2) ? '' : `<text x="${rects[i].cx.toFixed(1)}" y="${height - 6}" text-anchor="middle">${esc(b.label)}</text>`).join('')}</g>
+    <g class="axis-x">${bars.map((b, i) => ((bars.length - 1 - i) % labelStep) ? '' : `<text x="${rects[i].cx.toFixed(1)}" y="${height - 6}" text-anchor="middle">${esc(b.label)}</text>`).join('')}</g>
     ${spec.valueLabel ? (() => { const i = bars.length - 1; const r = rects[i]; return bars[i].value > 0 ? `<text class="end-label" x="${r.cx.toFixed(1)}" y="${(r.y - 7).toFixed(1)}" text-anchor="${i === bars.length - 1 ? 'end' : 'middle'}" dx="${i === bars.length - 1 ? bw / 2 : 0}">${esc(spec.valueLabel)}</text>` : ''; })() : ''}
     ${rects.map((r, i) => `<rect class="hit" data-i="${i}" x="${(pad.l + i * slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${height}" fill="transparent"/>`).join('')}
   </svg>`;

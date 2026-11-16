@@ -638,3 +638,73 @@ a.row:active, button.row:active, label.row:active { background: var(--press); }
   .content { padding: 0 24px; }
   .large-head { padding: 2px 28px 12px; }
 }
+
+/* ---------- Today: workout of the day ---------- */
+
+.today-card { padding-bottom: 4px; }
+.week-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 14px 6px 12px; border-bottom: 0.5px solid var(--sep); }
+.ws-day { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.ws-letter { font-size: 12px; font-weight: 600; color: var(--label-2); }
+.ws-day.today .ws-letter { color: var(--accent); }
+.ws-dot { position: relative; width: 30px; height: 30px; border-radius: 15px; display: grid; place-items: center; color: #fff; }
+.ws-day.done .ws-dot { background: var(--green-btn); }
+.ws-day.planned .ws-dot { border: 2px solid var(--label-3); }
+.ws-day.missed .ws-dot { border: 2px solid var(--label-3); opacity: 0.45; }
+.ws-day.rest .ws-dot::after { content: ""; width: 6px; height: 6px; border-radius: 3px; background: var(--fill-2); }
+.ws-day.today.planned .ws-dot { border: 2.5px solid var(--accent); background: var(--accent-tint); }
+.ws-day.today.rest .ws-dot { box-shadow: inset 0 0 0 2px var(--accent-tint); }
+.ws-day.today.done .ws-dot { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--green-btn); }
+.ws-name { max-width: 100%; padding: 0 2px; font-size: 10px; color: var(--label-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-day.today .ws-name { color: var(--label); font-weight: 600; }
+
+.today-head { padding: 14px 16px 4px; }
+.today-kicker { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.03em; font-variant-numeric: tabular-nums; }
+.today-head.done .today-kicker { color: var(--green); }
+.today-name { font-size: 28px; font-weight: 700; letter-spacing: 0.005em; margin-top: 2px; }
+.today-meta { font-size: 14px; color: var(--label-2); margin-top: 3px; line-height: 1.4; }
+.today-meta strong { color: var(--label); font-weight: 600; }
+.today-cols { display: flex; justify-content: space-between; padding: 12px 16px 2px; font-size: 12px; font-weight: 600; color: var(--label-2); text-transform: uppercase; letter-spacing: 0.03em; }
+.today-ex { position: relative; display: flex; align-items: center; gap: 12px; padding: 9px 16px; color: var(--label); text-decoration: none; }
+a.today-ex:active { background: var(--press); }
+.today-ex + .today-ex::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 0.5px; background: var(--sep); }
+.te-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.te-name { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.te-last { font-size: 14px; color: var(--label-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.te-date { color: var(--label-3); }
+.te-goal { flex: none; display: inline-flex; align-items: center; gap: 3px; height: 26px; padding: 0 9px; border-radius: 13px; background: var(--accent-tint); color: var(--accent); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.te-goal.up { background: var(--green-tint); color: var(--green); }
+.te-progress { flex: none; font-size: 14px; font-weight: 600; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.te-progress.complete { color: var(--green); }
+.today-empty { padding: 12px 16px; color: var(--label-2); font-size: 15px; }
+.today-note { display: flex; align-items: center; gap: 6px; padding: 10px 16px 0; font-size: 13px; color: var(--green); }
+.today-actions { padding: 14px 16px 10px; }
+.today-actions .btn.wide { margin-bottom: 2px; }
+.today-actions.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.today-actions.two .btn { padding: 0 10px; font-size: 16px; }
+.btn.small { height: 40px; font-size: 15px; width: 100%; }
+.live-dot { width: 8px; height: 8px; border-radius: 4px; background: var(--green); animation: pulse 2s infinite; }
+
+.goal-text { flex: 1; min-width: 0; }
+.goal-range { flex: none; font-size: 12px; font-weight: 600; opacity: 0.75; white-space: nowrap; }
+.baseline-note { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0 0 14px; color: var(--green); }
+
+/* ---------- Plan ---------- */
+
+.sched-row { min-height: 46px; }
+.sched-value { font-size: 16px; color: var(--label-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+.sched-value.on { color: var(--accent); font-weight: 500; }
+.today-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 9px; background: var(--accent-tint); color: var(--accent); font-size: 12px; font-weight: 600; vertical-align: 2px; }
+.rc-days { margin-left: 4px; font-size: 13px; font-weight: 600; color: var(--accent); }
+.re-target { border: 0; background: none; padding: 0; text-align: left; color: var(--label); }
+.re-target .row-sub { display: inline-flex; align-items: center; gap: 2px; color: var(--accent); }
+.footnote.top { margin: -2px 4px 12px; }
+.range-card { margin-top: 16px; }
+
+/* ---------- Exercise page charts ---------- */
+
+.range-filter { margin-top: 2px; }
+.card-sub { margin: -4px 16px 10px; font-size: 13px; color: var(--label-2); }
+.mini-label { margin: 6px 16px 0; font-size: 12px; font-weight: 600; color: var(--label-2); text-transform: uppercase; letter-spacing: 0.03em; }
+.formula-note { margin: -2px 16px 14px; font-size: 12px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.wk-stats { font-size: 12px; color: var(--label-3); margin-top: 1px; }
+.hero-next .goal-range { color: var(--accent); }

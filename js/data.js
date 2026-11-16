@@ -75,31 +75,36 @@ export const DEFAULT_EXERCISES = [
   ['russian-twist', 'Russian Twist', 'Core'],
 ];
 
-// Starter programs offered during onboarding. [routine name, [exercise ids]]
+// Starter programs offered during onboarding.
+// Each routine: [name, weekdays (0 = Sun … 6 = Sat), [[exercise id, sets, min reps, max reps]]].
+// Rep ranges drive "double progression": add reps until every set hits the top of the
+// range, then add weight and start again from the bottom.
 export const STARTER_PROGRAMS = {
   ppl: {
     label: 'Push · Pull · Legs',
-    detail: '3 routines, great for 3–6 days a week',
+    detail: 'Mon Push · Wed Pull · Fri Legs',
     routines: [
-      ['Push', ['bench-press', 'overhead-press', 'incline-db-press', 'lateral-raise', 'triceps-pushdown', 'overhead-triceps-ext']],
-      ['Pull', ['deadlift', 'pull-up', 'barbell-row', 'face-pull', 'barbell-curl', 'hammer-curl']],
-      ['Legs', ['squat', 'romanian-deadlift', 'leg-press', 'lying-leg-curl', 'standing-calf-raise']],
+      ['Push', [1], [['bench-press', 3, 5, 8], ['overhead-press', 3, 6, 10], ['incline-db-press', 3, 8, 12], ['lateral-raise', 3, 12, 15], ['triceps-pushdown', 3, 10, 15], ['overhead-triceps-ext', 3, 10, 15]]],
+      ['Pull', [3], [['deadlift', 3, 3, 6], ['pull-up', 3, 6, 10], ['barbell-row', 3, 6, 10], ['face-pull', 3, 12, 15], ['barbell-curl', 3, 8, 12], ['hammer-curl', 3, 10, 15]]],
+      ['Legs', [5], [['squat', 3, 5, 8], ['romanian-deadlift', 3, 8, 12], ['leg-press', 3, 10, 15], ['lying-leg-curl', 3, 10, 15], ['standing-calf-raise', 3, 12, 15]]],
     ],
   },
   upperLower: {
     label: 'Upper · Lower',
-    detail: '2 routines, great for 4 days a week',
+    detail: 'Mon & Thu Upper · Tue & Fri Lower',
     routines: [
-      ['Upper Body', ['bench-press', 'barbell-row', 'overhead-press', 'lat-pulldown', 'db-curl', 'triceps-pushdown']],
-      ['Lower Body', ['squat', 'romanian-deadlift', 'leg-press', 'lying-leg-curl', 'standing-calf-raise', 'hanging-leg-raise']],
+      ['Upper Body', [1, 4], [['bench-press', 3, 5, 8], ['barbell-row', 3, 6, 10], ['overhead-press', 3, 6, 10], ['lat-pulldown', 3, 8, 12], ['db-curl', 3, 10, 15], ['triceps-pushdown', 3, 10, 15]]],
+      ['Lower Body', [2, 5], [['squat', 3, 5, 8], ['romanian-deadlift', 3, 8, 12], ['leg-press', 3, 10, 15], ['lying-leg-curl', 3, 10, 15], ['standing-calf-raise', 3, 12, 15], ['hanging-leg-raise', 3, 10, 15]]],
     ],
   },
   fullBody: {
     label: 'Full Body',
-    detail: '2 routines, great for 2–3 days a week',
+    detail: 'Mon & Fri A · Wed B',
     routines: [
-      ['Full Body A', ['squat', 'bench-press', 'barbell-row', 'lateral-raise', 'db-curl']],
-      ['Full Body B', ['deadlift', 'overhead-press', 'lat-pulldown', 'leg-press', 'triceps-pushdown']],
+      ['Full Body A', [1, 5], [['squat', 3, 5, 8], ['bench-press', 3, 5, 8], ['barbell-row', 3, 6, 10], ['lateral-raise', 3, 12, 15], ['db-curl', 3, 10, 15]]],
+      ['Full Body B', [3], [['deadlift', 3, 3, 6], ['overhead-press', 3, 6, 10], ['lat-pulldown', 3, 8, 12], ['leg-press', 3, 10, 15], ['triceps-pushdown', 3, 10, 15]]],
     ],
   },
 };
+
+export const DEFAULT_REP_RANGE = [8, 12];

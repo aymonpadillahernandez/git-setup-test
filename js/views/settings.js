@@ -6,7 +6,7 @@ import { esc, fmtRelativeDay, plural } from '../format.js';
 import { icon } from '../icons.js';
 import { onAction, onInput, segmented, actionSheet, confirmAction, toast, navigate } from '../ui.js';
 import { newExerciseSheet } from '../picker.js';
-import { sessionsFor } from '../stats.js';
+import { sessionsFor, FORMULAS, recomputeAllPRs } from '../stats.js';
 
 const REST_OPTIONS = [[0, 'Off'], [30, '30 s'], [45, '45 s'], [60, '1 min'], [90, '1 min 30 s'], [120, '2 min'], [150, '2 min 30 s'], [180, '3 min'], [240, '4 min'], [300, '5 min']];
 
@@ -15,7 +15,7 @@ export function settingsView() {
   return {
     title: 'Settings',
     large: false,
-    back: { href: 'summary', label: 'Summary' },
+    back: { href: 'today', label: 'Today' },
     body: `<div class="section-head"><h2>Training</h2></div>
       <section class="card list">
         <div class="row"><span class="row-main"><span class="row-title">Units</span></span>${segmented('unit', [['kg', 'kg'], ['lb', 'lb']], s.unit)}</div>
@@ -28,7 +28,10 @@ export function settingsView() {
         <div class="row"><span class="row-main"><span class="row-title">Week starts on</span></span>${segmented('weekStart', [[1, 'Mon'], [0, 'Sun']], s.weekStart)}</div>
         <label class="row"><span class="row-main"><span class="row-title">Rest timer</span><span class="row-sub">Starts when you complete a set</span></span>
           <select class="select" data-input="rest">${REST_OPTIONS.map(([v, l]) => `<option value="${v}" ${v === s.rest ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="row"><span class="row-main"><span class="row-title">Strength formula</span><span class="row-sub">Estimated 1-rep max</span></span>
+          <select class="select" data-input="formula">${Object.entries(FORMULAS).map(([k, f]) => `<option value="${k}" ${k === s.formula ? 'selected' : ''}>${f.label}</option>`).join('')}</select></label>
       </section>
+      <p class="footnote">${esc(FORMULAS[s.formula]?.label || 'Epley')}: est. 1RM = ${esc(FORMULAS[s.formula]?.text || FORMULAS.epley.text)}. It combines weight and reps into one strength number, so you can compare 80 kg × 5 with 70 kg × 10. Most accurate for sets of 1–10 reps.</p>
       <section class="card list">
         <a class="row" href="#/settings/exercises"><span class="row-main"><span class="row-title">Exercises</span></span><span class="row-value">${db.exercises.length}</span>${icon('chevronRight', { size: 16, stroke: 2.4, cls: 'chev' })}</a>
       </section>
@@ -64,6 +67,14 @@ onInput('rest', (el, e) => {
   db.settings.rest = Number(el.value) || 0;
   persist();
   toast(db.settings.rest ? 'Rest timer updated' : 'Rest timer off', { iconName: 'timer' });
+});
+
+onInput('formula', (el, e) => {
+  if (e.type !== 'change' || !FORMULAS[el.value]) return;
+  db.settings.formula = el.value;
+  commit();
+  recomputeAllPRs();
+  commit();
 });
 
 onAction('export', async () => {
@@ -116,7 +127,7 @@ onAction('erase', async () => {
   const ok = await confirmAction({ title: 'Erase all data?', message: 'All workouts, routines and settings will be deleted from this device. Export a backup first if you want to keep them.', confirm: 'Erase Everything', destructive: true });
   if (!ok) return;
   resetAll();
-  location.hash = '#/summary';
+  location.hash = '#/today';
   location.reload();
 });
 

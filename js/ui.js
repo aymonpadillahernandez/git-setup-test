@@ -1,6 +1,6 @@
 // Shared UI plumbing: delegated actions, bottom sheets, dialogs, toasts.
 
-import { esc } from './format.js';
+import { esc, fmtSet } from './format.js';
 import { icon } from './icons.js';
 
 export function navigate(path, { replace = false } = {}) {
@@ -172,6 +172,15 @@ export function emptyState({ iconName, title, text, button = '' }) {
     <p>${esc(text)}</p>
     ${button}
   </div>`;
+}
+
+/** "Beat last time: 75 kg × 10" etc. for a suggestNext() result (HTML). */
+export function goalText(goal, unit) {
+  if (!goal) return '';
+  const set = `<strong>${esc(fmtSet(goal, unit))}</strong>`;
+  if (goal.kind === 'weight') return `Add weight: ${set}`;
+  if (goal.kind === 'allSets') return `Get ${set} on every set`;
+  return `Beat last time: ${set}`;
 }
 
 export function deltaChip(diff, { format = (v) => String(v), neutral = 'Same' } = {}) {

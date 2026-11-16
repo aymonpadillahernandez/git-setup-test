@@ -1,8 +1,8 @@
-// Workout tab (start a workout, routines) and the routine editor.
+// Plan tab (weekly schedule, routines) and the routine editor.
 
-import { db, commit, uid, exById, exName, routineById, addStarterProgram } from '../store.js';
-import { STARTER_PROGRAMS } from '../data.js';
-import { esc, fmtSet, fmtRelativeDay, plural } from '../format.js';
+import { db, commit, uid, exById, exName, routineById, addStarterProgram, scheduledRoutine, removeRoutine } from '../store.js';
+import { STARTER_PROGRAMS, DEFAULT_REP_RANGE } from '../data.js';
+import { esc, fmtSet, fmtRelativeDay } from '../format.js';
 import { icon } from '../icons.js';
 import { onAction, onInput, openSheet, actionSheet, confirmAction, toast, navigate } from '../ui.js';
 import { startWorkout, openWorkoutSheet, editWorkout } from '../workout.js';
@@ -13,8 +13,15 @@ function lastDone(routineId) {
   return workoutsDesc().find((w) => w.routineId === routineId) || null;
 }
 
-export function workoutTabView() {
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** Weekdays in display order (respecting the week-start setting). */
+const weekdays = () => Array.from({ length: 7 }, (_, i) => (db.settings.weekStart + i) % 7);
+const daysFor = (routineId) => weekdays().filter((d) => db.schedule[d] === routineId);
+
+export function planView() {
   const routines = db.routines;
+  const todayDow = new Date().getDay();
   const active = db.active
     ? `<section class="card active-card">
         <div class="active-pulse"></div>
@@ -23,13 +30,25 @@ export function workoutTabView() {
       </section>`
     : '';
 
+  const schedule = routines.length ? `<div class="section-head"><h2>Weekly schedule</h2></div>
+    <section class="card list">${weekdays().map((d) => {
+      const r = scheduledRoutine(d);
+      return `<button class="row sched-row" data-action="sched-day" data-day="${d}">
+        <span class="row-main"><span class="row-title">${DAY_NAMES[d]}${d === todayDow ? ' <span class="today-badge">Today</span>' : ''}</span></span>
+        <span class="sched-value ${r ? 'on' : ''}">${r ? esc(r.name) : 'Rest'}</span>
+        ${icon('chevronRight', { size: 16, stroke: 2.4, cls: 'chev' })}
+      </button>`;
+    }).join('')}</section>
+    <p class="footnote">The Today tab shows the workout planned for each day, with last week’s weight and reps. Miss a day and it’s offered again on your next free day.</p>` : '';
+
   const cards = routines.map((r) => {
     const names = r.items.map((it) => exName(it.exId));
     const preview = names.slice(0, 3).join(' · ') + (names.length > 3 ? ` +${names.length - 3}` : '');
     const last = lastDone(r.id);
+    const days = daysFor(r.id).map((d) => DAY_NAMES[d].slice(0, 3)).join(' · ');
     return `<article class="routine-card">
       <button class="rc-main" data-action="routine-preview" data-id="${esc(r.id)}">
-        <h3>${esc(r.name)}</h3>
+        <h3>${esc(r.name)}${days ? ` <span class="rc-days">${esc(days)}</span>` : ''}</h3>
         <p class="rc-ex">${esc(preview || 'No exercises yet')}</p>
         <p class="rc-last">${icon('calendar', { size: 13, stroke: 2.2 })} ${last ? esc(fmtRelativeDay(last.start)) : 'Not done yet'}</p>
       </button>
@@ -44,26 +63,42 @@ export function workoutTabView() {
       </button>`).join('')}</div>`;
 
   return {
-    title: 'Workout',
+    title: 'Plan',
     body: `${active}
-      ${db.active ? '' : `<button class="btn filled wide big" data-action="quick-start">${icon('plus', { size: 20, stroke: 2.6 })} Start Empty Workout</button>`}
+      ${schedule}
       <div class="section-head"><h2>Routines</h2><a class="text-btn" href="#/routines/new">${icon('plus', { size: 17, stroke: 2.4 })} New</a></div>
       ${routines.length ? `<div class="routine-grid">${cards}</div>` : `<section class="card empty-routines">
-          <p>Routines are your workout templates: pick the exercises once, then start them in one tap.</p>
+          <p>Routines are your workout templates: pick the exercises and rep ranges once, give each a day, and Lift has it ready every time.</p>
           <a class="btn tinted wide" href="#/routines/new">Create Routine</a>
           <div class="field-label">Or start with a proven program</div>
           ${starters}
         </section>`}
+      ${db.active ? '' : `<button class="btn plain wide" data-action="quick-start">${icon('plus', { size: 18, stroke: 2.4 })} Start Empty Workout</button>`}
       <button class="btn plain wide" data-action="log-past">${icon('calendar', { size: 18 })} Log a Past Workout</button>`,
   };
 }
+
+onAction('sched-day', async (el) => {
+  const d = Number(el.dataset.day);
+  const choice = await actionSheet({
+    title: DAY_NAMES[d],
+    options: [
+      ...db.routines.map((r) => ({ label: r.name, value: r.id, style: db.schedule[d] === r.id ? 'bold' : '' })),
+      { label: 'Rest Day', value: '__rest' },
+    ],
+  });
+  if (!choice) return;
+  if (choice === '__rest') delete db.schedule[d];
+  else db.schedule[d] = choice;
+  commit();
+});
 
 onAction('routine-start', (el) => startWorkout({ routineId: el.dataset.id }));
 onAction('log-past', () => editWorkout(null));
 onAction('add-starter', (el) => {
   addStarterProgram(el.dataset.key);
   commit();
-  toast('Routines added');
+  toast('Routines and schedule added');
 });
 
 /** Ask which routine to start (used by Summary). */
@@ -87,11 +122,11 @@ onAction('routine-preview', (el) => {
   if (!r) return;
   const u = db.settings.unit;
   const rows = r.items.map((it) => {
-    const last = lastSession(it.exId);
+    const last = lastSession(it.exId, { routineId: r.id });
     const top = last && topSet(last.sets);
     return `<div class="row">
       <span class="row-main"><span class="row-title">${esc(exName(it.exId))}</span>
-      <span class="row-sub">${plural(it.sets, 'set')}${top ? ` · last best ${esc(fmtSet(top, u))}` : ''}</span></span>
+      <span class="row-sub">${it.sets} × ${it.repMin}–${it.repMax} reps${top ? ` · last best ${esc(fmtSet(top, u))}` : ''}</span></span>
     </div>`;
   }).join('');
   const sheet = openSheet({
@@ -135,7 +170,7 @@ export function routineEditorView(id) {
     const ex = exById(it.exId);
     return `<div class="row re-row" data-i="${i}">
       <span class="drag-handle" aria-label="Reorder">${icon('grip', { size: 20, stroke: 2 })}</span>
-      <span class="row-main"><span class="row-title">${esc(ex?.name || 'Deleted exercise')}</span><span class="row-sub">${esc(ex?.muscle || '')}</span></span>
+      <button class="row-main re-target" data-action="re-target" data-i="${i}"><span class="row-title">${esc(ex?.name || 'Deleted exercise')}</span><span class="row-sub accent">${it.repMin}–${it.repMax} reps ${icon('chevronRight', { size: 12, stroke: 2.6 })}</span></button>
       <span class="stepper">
         <button data-action="re-sets" data-i="${i}" data-d="-1" aria-label="Fewer sets" ${it.sets <= 1 ? 'disabled' : ''}>${icon('minus', { size: 15, stroke: 2.6 })}</button>
         <span class="stepper-val">${it.sets}<small> ${it.sets === 1 ? 'set' : 'sets'}</small></span>
@@ -154,6 +189,7 @@ export function routineEditorView(id) {
         <input class="field big" data-input="re-name" value="${esc(draft.name)}" placeholder="Routine name (e.g. Push Day)" maxlength="40" autocomplete="off">
       </section>
       <div class="section-head"><h2>Exercises</h2>${draft.items.length > 1 ? '<span class="section-note">Drag to reorder</span>' : ''}</div>
+      ${draft.items.length ? '<p class="footnote top">Tap an exercise to set its rep range. When every set reaches the top of the range, Lift tells you to add weight.</p>' : ''}
       ${draft.items.length ? `<section class="card list sortable">${rows}</section>` : ''}
       <button class="btn tinted wide" data-action="re-add">${icon('plus', { size: 18, stroke: 2.4 })} Add Exercises</button>
       ${draft.isNew ? '' : '<button class="btn plain destructive wide" data-action="re-delete">Delete Routine</button>'}`,
@@ -172,6 +208,44 @@ onAction('re-sets', (el) => {
   rerender();
 });
 
+const REP_PRESETS = [[3, 5, 'Strength'], [5, 8, 'Strength'], [6, 10, 'Strength & size'], [8, 12, 'Muscle growth'], [10, 15, 'Muscle growth'], [12, 20, 'Endurance']];
+
+onAction('re-target', (el) => {
+  const it = draft?.items[Number(el.dataset.i)];
+  if (!it) return;
+  const render = () => `<header class="sheet-nav">
+      <span class="nav-btn-spacer"></span>
+      <div class="sheet-title">${esc(exName(it.exId))}</div>
+      <button class="nav-btn bold" data-t="done">Done</button>
+    </header>
+    <div class="sheet-pad">
+      <div class="field-label">Rep range</div>
+      <div class="chips">${REP_PRESETS.map(([a, b]) => `<button class="chip ${a === it.repMin && b === it.repMax ? 'on' : ''}" data-t="preset" data-a="${a}" data-b="${b}">${a}–${b}</button>`).join('')}</div>
+      <section class="card list flush range-card">
+        <div class="row"><span class="row-main"><span class="row-title">Minimum reps</span></span>
+          <span class="stepper"><button data-t="min" data-d="-1" ${it.repMin <= 1 ? 'disabled' : ''} aria-label="Fewer">${icon('minus', { size: 15, stroke: 2.6 })}</button><span class="stepper-val">${it.repMin}</span><button data-t="min" data-d="1" ${it.repMin >= it.repMax ? 'disabled' : ''} aria-label="More">${icon('plus', { size: 15, stroke: 2.6 })}</button></span></div>
+        <div class="row"><span class="row-main"><span class="row-title">Maximum reps</span></span>
+          <span class="stepper"><button data-t="max" data-d="-1" ${it.repMax <= it.repMin ? 'disabled' : ''} aria-label="Fewer">${icon('minus', { size: 15, stroke: 2.6 })}</button><span class="stepper-val">${it.repMax}</span><button data-t="max" data-d="1" ${it.repMax >= 30 ? 'disabled' : ''} aria-label="More">${icon('plus', { size: 15, stroke: 2.6 })}</button></span></div>
+        <div class="row"><span class="row-main"><span class="row-title">Sets</span></span>
+          <span class="stepper"><button data-t="sets" data-d="-1" ${it.sets <= 1 ? 'disabled' : ''} aria-label="Fewer">${icon('minus', { size: 15, stroke: 2.6 })}</button><span class="stepper-val">${it.sets}</span><button data-t="sets" data-d="1" ${it.sets >= 10 ? 'disabled' : ''} aria-label="More">${icon('plus', { size: 15, stroke: 2.6 })}</button></span></div>
+      </section>
+      <p class="footnote">${REP_PRESETS.find(([a, b]) => a === it.repMin && b === it.repMax)?.[2] ? `${REP_PRESETS.find(([a, b]) => a === it.repMin && b === it.repMax)[2]} range. ` : ''}Each session, aim for one more rep. Once all ${it.sets} sets reach ${it.repMax} reps, add weight and start again at ${it.repMin}.</p>
+    </div>`;
+  const sheet = openSheet({ kind: 'auto', label: 'Rep range', content: render(), onClose: rerender });
+  sheet.body.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-t]');
+    if (!b) return;
+    const t = b.dataset.t;
+    if (t === 'done') { sheet.close(); return; }
+    if (t === 'preset') { it.repMin = Number(b.dataset.a); it.repMax = Number(b.dataset.b); }
+    const d = Number(b.dataset.d);
+    if (t === 'min') it.repMin = Math.max(1, Math.min(it.repMax, it.repMin + d));
+    if (t === 'max') it.repMax = Math.max(it.repMin, Math.min(30, it.repMax + d));
+    if (t === 'sets') it.sets = Math.max(1, Math.min(10, it.sets + d));
+    sheet.setContent(render());
+  });
+});
+
 onAction('re-remove', (el) => {
   draft?.items.splice(Number(el.dataset.i), 1);
   rerender();
@@ -180,13 +254,13 @@ onAction('re-remove', (el) => {
 onAction('re-add', async () => {
   const ids = await pickExercises();
   if (!draft || !ids.length) return;
-  for (const exId of ids) draft.items.push({ exId, sets: 3 });
+  for (const exId of ids) draft.items.push({ exId, sets: 3, repMin: DEFAULT_REP_RANGE[0], repMax: DEFAULT_REP_RANGE[1] });
   rerender();
 });
 
 onAction('re-cancel', () => {
   draft = null; draftFor = null;
-  navigate('workout');
+  navigate('plan');
 });
 
 onAction('re-save', () => {
@@ -205,17 +279,17 @@ onAction('re-save', () => {
   draft = null; draftFor = null;
   commit();
   toast(isNew ? 'Routine created' : 'Routine saved');
-  navigate('workout');
+  navigate('plan');
 });
 
 onAction('re-delete', async () => {
   if (!draft) return;
   const ok = await confirmAction({ title: `Delete “${draft.name || 'this routine'}”?`, message: 'Past workouts stay in your history.', confirm: 'Delete Routine', destructive: true });
   if (!ok) return;
-  db.routines = db.routines.filter((r) => r.id !== draft.id);
+  removeRoutine(draft.id);
   draft = null; draftFor = null;
   commit();
-  navigate('workout');
+  navigate('plan');
 });
 
 /** Drag the grip handle to reorder rows. */

@@ -5,8 +5,8 @@ import { esc, fmtClock } from './format.js';
 import { icon } from './icons.js';
 import { hydrateCharts } from './charts.js';
 import { onAction, navigate } from './ui.js';
-import { summaryView } from './views/summary.js';
-import { workoutTabView, routineEditorView } from './views/routines.js';
+import { todayView } from './views/today.js';
+import { planView, routineEditorView } from './views/routines.js';
 import { historyView, workoutDetailView } from './views/history.js';
 import { progressView, exerciseProgressView } from './views/progress.js';
 import { settingsView, exerciseManagerView } from './views/settings.js';
@@ -14,18 +14,18 @@ import { openWorkoutSheet, isWorkoutSheetOpen } from './workout.js';
 import { showOnboarding } from './onboarding.js';
 
 const TABS = [
-  ['summary', 'Summary', 'rings'],
-  ['workout', 'Workout', 'dumbbell'],
+  ['today', 'Today', 'rings'],
+  ['plan', 'Plan', 'dumbbell'],
   ['history', 'History', 'history'],
   ['progress', 'Progress', 'chart'],
 ];
 
 const ROUTES = [
-  ['summary', /^summary$/, summaryView],
-  ['summary', /^settings$/, settingsView],
-  ['summary', /^settings\/exercises$/, exerciseManagerView],
-  ['workout', /^workout$/, workoutTabView],
-  ['workout', /^routines\/([\w-]+)$/, routineEditorView],
+  ['today', /^today$/, todayView],
+  ['today', /^settings$/, settingsView],
+  ['today', /^settings\/exercises$/, exerciseManagerView],
+  ['plan', /^plan$/, planView],
+  ['plan', /^routines\/([\w-]+)$/, routineEditorView],
   ['history', /^history$/, historyView],
   ['history', /^history\/([\w-]+)$/, workoutDetailView],
   ['progress', /^progress$/, progressView],
@@ -39,11 +39,12 @@ const mini = document.getElementById('mini');
 const lastRouteByTab = {};
 const scrollByRoute = new Map();
 let currentPath = null;
-let currentTab = 'summary';
+let currentTab = 'today';
 let titleObserver;
 
 function currentHashPath() {
-  return decodeURIComponent(location.hash.replace(/^#\/?/, '')) || 'summary';
+  const path = decodeURIComponent(location.hash.replace(/^#\/?/, '')) || 'today';
+  return { summary: 'today', workout: 'plan' }[path] || path; // old links
 }
 
 function resolve(path) {
@@ -57,7 +58,7 @@ function resolve(path) {
 function render({ refresh = false } = {}) {
   const path = currentHashPath();
   const route = resolve(path);
-  if (!route) { navigate('summary', { replace: true }); return; }
+  if (!route) { navigate('today', { replace: true }); return; }
 
   const v = route.view(...route.params);
   if (!v) { navigate(route.tab, { replace: true }); return; }

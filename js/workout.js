@@ -4,11 +4,12 @@
 import { db, persist, commit, uid, exById, exName, routineById, workoutById } from './store.js';
 import {
   esc, fmtClock, fmtDateLong, fmtTime, fmtSet, fmtVolume, fmtDuration, wInput, wVal,
-  parseNumber, fromUnit, fmtMonthDay, plural,
+  parseNumber, fromUnit, fmtMonthDay, fmtDate, plural,
 } from './format.js';
 import { icon } from './icons.js';
-import { openSheet, actionSheet, confirmAction, toast, navigate } from './ui.js';
+import { openSheet, actionSheet, confirmAction, toast, navigate, goalText } from './ui.js';
 import { pickExercises } from './picker.js';
+import { DEFAULT_REP_RANGE } from './data.js';
 import {
   lastSession, bestsFor, setPRType, computePRs, suggestNext, topSet, workoutVolume,
   workoutSetCount, PR_LABELS, doneSets,
@@ -154,7 +155,7 @@ function toLocalInput(ms) {
 
 function cardContext(wex) {
   const d = ctx.draft;
-  const last = lastSession(wex.exId, { excludeId: d.id, before: d.start });
+  const last = lastSession(wex.exId, { excludeId: d.id, before: d.start, routineId: d.routineId });
   const bests = bestsFor(wex.exId, { excludeId: d.id, before: d.start });
   return { last, bests };
 }
@@ -173,7 +174,8 @@ function renderCard(wex) {
   const u = unit();
   const ex = exById(wex.exId);
   const { last, bests } = cardContext(wex);
-  const goal = ctx.mode === 'active' ? suggestNext(wex.exId, { excludeId: ctx.draft.id, unit: u }) : null;
+  const d = ctx.draft;
+  const goal = ctx.mode === 'active' ? suggestNext(wex.exId, { excludeId: d.id, before: d.start, routineId: d.routineId, unit: u }) : null;
   const lastText = last
     ? `${last.sets.map((s) => (s.w ? `${wVal(s.w, u)}×${s.r}` : `${s.r}`)).join(', ')}`
     : '';
@@ -198,11 +200,11 @@ function renderCard(wex) {
     <header class="ex-head">
       <div class="ex-title">
         <h3>${esc(ex?.name || 'Deleted exercise')}</h3>
-        ${last ? `<div class="ex-last">Last · ${esc(fmtMonthDay(last.workout.start))} · ${esc(lastText)}</div>` : '<div class="ex-last">First time — set your baseline</div>'}
+        ${last ? `<div class="ex-last">Last time · ${esc(fmtDate(last.workout.start))} · ${esc(lastText)}</div>` : '<div class="ex-last">First time: today sets your baseline</div>'}
       </div>
       <button class="icon-btn small" data-wk="ex-menu" aria-label="Exercise options">${icon('more', { size: 22 })}</button>
     </header>
-    ${goal ? `<div class="ex-goal">${icon('target', { size: 15, stroke: 2.2 })}<span>Beat last time: <strong>${esc(fmtSet(goal, u))}</strong></span></div>` : ''}
+    ${goal ? `<div class="ex-goal">${icon('target', { size: 15, stroke: 2.2 })}<span class="goal-text">${goalText(goal, u)}</span><span class="goal-range">${goal.range[0]}–${goal.range[1]} reps</span></div>` : ''}
     <div class="set-head"><span>Set</span><span>Previous</span><span>${esc(u)}</span><span>Reps</span><span class="sr-only">Done</span></div>
     <div class="sets">${rows}</div>
     <button class="add-set" data-wk="add-set">${icon('plus', { size: 16, stroke: 2.4 })} Add Set</button>
@@ -611,6 +613,7 @@ function showCompletion(w) {
           <span class="row-main"><span>${esc(exName(p.exId))}</span><span class="row-sub">${esc(PR_LABELS[p.type])}</span></span>
           <span class="row-value">${esc(p.type === 'volume' ? fmtVolume(p.vol, u) : fmtSet(p, u))}</span></div>`).join('')}</section>` : ''}
       <section class="card list"><h4 class="card-title">Exercises</h4><ul class="done-list">${highlights}</ul></section>
+      <p class="footnote baseline-note">${icon('check', { size: 14, stroke: 2.6 })} Saved. These sets are your baseline for next time.</p>
       ${!w.routineId ? '<button class="btn tinted wide" data-done="routine">Save as Routine</button>' : ''}
       <button class="btn filled wide" data-done="close">Done</button>
     </div>`,
@@ -630,7 +633,7 @@ export function saveAsRoutine(w) {
   const r = {
     id: uid(),
     name: w.name,
-    items: w.exercises.map((wex) => ({ exId: wex.exId, sets: Math.max(1, doneSets(wex).length || wex.sets.length) })),
+    items: w.exercises.map((wex) => ({ exId: wex.exId, sets: Math.max(1, doneSets(wex).length || wex.sets.length), repMin: DEFAULT_REP_RANGE[0], repMax: DEFAULT_REP_RANGE[1] })),
   };
   db.routines.push(r);
   const stored = workoutById(w.id);

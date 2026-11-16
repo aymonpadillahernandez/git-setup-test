@@ -2,15 +2,16 @@
 //
 // Shape:
 // {
-//   version, settings: { unit, weeklyGoal, weekStart, rest, onboarded },
+//   version, settings: { unit, weeklyGoal, weekStart, rest, formula, onboarded },
 //   exercises: [{ id, name, muscle }],
-//   routines:  [{ id, name, items: [{ exId, sets }] }],
+//   routines:  [{ id, name, items: [{ exId, sets, repMin, repMax }] }],
+//   schedule:  { 0..6: routineId | null }   (weekday → routine; 0 = Sunday)
 //   workouts:  [{ id, name, routineId, start, end, exercises: [{ id, exId, sets: [{ w, r, done }] }], prs }],
 //   active:    workout-in-progress | null  (same shape as a workout, plus `rest`)
 //   meta:      { created, lastBackup }
 // }
 
-import { DEFAULT_EXERCISES, STARTER_PROGRAMS } from './data.js';
+import { DEFAULT_EXERCISES, STARTER_PROGRAMS, DEFAULT_REP_RANGE } from './data.js';
 
 const KEY = 'lift:data';
 const VERSION = 1;
@@ -28,9 +29,10 @@ export function uid() {
 function fresh() {
   return {
     version: VERSION,
-    settings: { unit: 'kg', weeklyGoal: 3, weekStart: 1, rest: 90, onboarded: false },
+    settings: { unit: 'kg', weeklyGoal: 3, weekStart: 1, rest: 90, formula: 'epley', onboarded: false },
     exercises: DEFAULT_EXERCISES.map(([id, name, muscle]) => ({ id, name, muscle })),
     routines: [],
+    schedule: {},
     workouts: [],
     active: null,
     meta: { created: Date.now(), lastBackup: null },
@@ -50,7 +52,15 @@ export function normalize(data) {
   out.exercises = Array.isArray(data.exercises) ? data.exercises.filter((e) => e && e.id && e.name) : base.exercises;
   out.routines = Array.isArray(data.routines) ? data.routines.filter((r) => r && r.id) : [];
   out.workouts = Array.isArray(data.workouts) ? data.workouts.filter((w) => w && w.id && Array.isArray(w.exercises)) : [];
-  out.routines.forEach((r) => { r.items = Array.isArray(r.items) ? r.items : []; });
+  out.routines.forEach((r) => {
+    r.items = (Array.isArray(r.items) ? r.items : []).map((it) => ({
+      ...it,
+      sets: it.sets || 3,
+      repMin: it.repMin || DEFAULT_REP_RANGE[0],
+      repMax: it.repMax || DEFAULT_REP_RANGE[1],
+    }));
+  });
+  out.schedule = data.schedule && typeof data.schedule === 'object' ? { ...data.schedule } : {};
   out.workouts.forEach((w) => { w.prs = Array.isArray(w.prs) ? w.prs : []; });
   out.active = data.active && Array.isArray(data.active.exercises) ? data.active : null;
   out.version = VERSION;
@@ -118,9 +128,22 @@ export function addExercise(name, muscle) {
 export function addStarterProgram(key) {
   const program = STARTER_PROGRAMS[key];
   if (!program) return;
-  for (const [name, exIds] of program.routines) {
-    db.routines.push({ id: uid(), name, items: exIds.map((exId) => ({ exId, sets: 3 })) });
+  for (const [name, days, items] of program.routines) {
+    const id = uid();
+    db.routines.push({ id, name, items: items.map(([exId, sets, repMin, repMax]) => ({ exId, sets, repMin, repMax })) });
+    for (const d of days) if (!db.schedule[d]) db.schedule[d] = id;
   }
+}
+
+/** Routine planned for a weekday (0 = Sunday), if it still exists. */
+export function scheduledRoutine(weekday) {
+  const id = db.schedule[weekday];
+  return id ? routineById(id) || null : null;
+}
+
+export function removeRoutine(id) {
+  db.routines = db.routines.filter((r) => r.id !== id);
+  for (const d of Object.keys(db.schedule)) if (db.schedule[d] === id) delete db.schedule[d];
 }
 
 /** Ask the browser not to evict our storage (best effort). */
