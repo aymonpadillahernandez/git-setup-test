@@ -279,12 +279,15 @@ export const hasSchedule = () => Object.keys(db.schedule).some((d) => scheduledR
 
 /**
  * What to train today.
- * - With a weekly schedule: today's planned routine; on an unplanned day, the first
- *   routine planned earlier this week that hasn't been done yet (catch-up), else rest.
- * - Without a schedule: the routine after the last one you did (rotation).
- * Returns { kind: 'today' | 'catchup' | 'rest' | 'next' | 'none', routine, todayWorkout, nextPlanned, week }.
+ * - 'rotation' mode (default): routines are done in order, any number of days a week.
+ *   Today = the routine after the last one you completed (Day 5 wraps to Day 1).
+ * - 'schedule' mode: today's planned routine; on an unplanned day, the first routine
+ *   planned earlier this week that hasn't been done yet (catch-up), else rest.
+ * Returns { mode, kind: 'today' | 'catchup' | 'rest' | 'next' | 'none', routine, upNext,
+ *           cycle: { index, total }, todayWorkout, nextPlanned, catchupDay, week }.
  */
 export function todayPlan(now = Date.now()) {
+  const mode = db.settings.planMode === 'schedule' && hasSchedule() ? 'schedule' : 'rotation';
   const dayStart = startOfDay(now);
   const dayEnd = addDays(dayStart, 1);
   const weekStart = weekOf(now);
@@ -300,7 +303,7 @@ export function todayPlan(now = Date.now()) {
     week.push({
       day,
       weekday: new Date(day).getDay(),
-      routine: scheduledRoutine(new Date(day).getDay()),
+      routine: mode === 'schedule' ? scheduledRoutine(new Date(day).getDay()) : null,
       workouts: thisWeek.filter((w) => w.start >= day && w.start < next),
       isToday: day === dayStart,
       isPast: day < dayStart,
@@ -311,8 +314,10 @@ export function todayPlan(now = Date.now()) {
   let routine = null;
   let nextPlanned = null;
   let catchupDay = null;
+  let upNext = null;
+  let cycle = null;
 
-  if (hasSchedule()) {
+  if (mode === 'schedule') {
     routine = scheduledRoutine(new Date(now).getDay());
     if (routine) kind = 'today';
     else {
@@ -328,11 +333,13 @@ export function todayPlan(now = Date.now()) {
   } else if (db.routines.length) {
     const last = workoutsDesc().find((w) => w.routineId && routineById(w.routineId));
     const idx = last ? db.routines.findIndex((r) => r.id === last.routineId) : -1;
+    upNext = db.routines[(idx + 1) % db.routines.length];
     const doneTodayRoutine = todays.find((w) => w.routineId && routineById(w.routineId));
-    routine = doneTodayRoutine ? routineById(doneTodayRoutine.routineId) : db.routines[(idx + 1) % db.routines.length];
+    routine = doneTodayRoutine ? routineById(doneTodayRoutine.routineId) : upNext;
+    cycle = { index: db.routines.indexOf(upNext), total: db.routines.length };
     kind = 'next';
   }
 
   const todayWorkout = (routine && todays.find((w) => w.routineId === routine.id)) || todays[0] || null;
-  return { kind, routine, todayWorkout, nextPlanned, catchupDay, week };
+  return { mode, kind, routine, upNext, cycle, todayWorkout, nextPlanned, catchupDay, week };
 }

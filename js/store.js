@@ -2,7 +2,8 @@
 //
 // Shape:
 // {
-//   version, settings: { unit, weeklyGoal, weekStart, rest, formula, onboarded },
+//   version, settings: { unit, weeklyGoal, weekStart, rest, formula, planMode, onboarded },
+//              planMode: 'rotation' (routines in order, any days) | 'schedule' (fixed weekdays)
 //   exercises: [{ id, name, muscle }],
 //   routines:  [{ id, name, items: [{ exId, sets, repMin, repMax }] }],
 //   schedule:  { 0..6: routineId | null }   (weekday → routine; 0 = Sunday)
@@ -29,7 +30,7 @@ export function uid() {
 function fresh() {
   return {
     version: VERSION,
-    settings: { unit: 'kg', weeklyGoal: 3, weekStart: 1, rest: 90, formula: 'epley', onboarded: false },
+    settings: { unit: 'kg', weeklyGoal: 4, weekStart: 1, rest: 90, formula: 'epley', planMode: 'rotation', onboarded: false },
     exercises: DEFAULT_EXERCISES.map(([id, name, muscle]) => ({ id, name, muscle })),
     routines: [],
     schedule: {},
@@ -50,6 +51,9 @@ export function normalize(data) {
     meta: { ...base.meta, ...(data.meta || {}) },
   };
   out.exercises = Array.isArray(data.exercises) ? data.exercises.filter((e) => e && e.id && e.name) : base.exercises;
+  // Newer built-in exercises appear for existing users too.
+  const known = new Set(out.exercises.map((e) => e.id));
+  for (const e of base.exercises) if (!known.has(e.id)) out.exercises.push(e);
   out.routines = Array.isArray(data.routines) ? data.routines.filter((r) => r && r.id) : [];
   out.workouts = Array.isArray(data.workouts) ? data.workouts.filter((w) => w && w.id && Array.isArray(w.exercises)) : [];
   out.routines.forEach((r) => {
@@ -61,6 +65,7 @@ export function normalize(data) {
     }));
   });
   out.schedule = data.schedule && typeof data.schedule === 'object' ? { ...data.schedule } : {};
+  if (!data.settings?.planMode) out.settings.planMode = Object.keys(out.schedule).length ? 'schedule' : 'rotation';
   out.workouts.forEach((w) => { w.prs = Array.isArray(w.prs) ? w.prs : []; });
   out.active = data.active && Array.isArray(data.active.exercises) ? data.active : null;
   out.version = VERSION;
@@ -128,6 +133,7 @@ export function addExercise(name, muscle) {
 export function addStarterProgram(key) {
   const program = STARTER_PROGRAMS[key];
   if (!program) return;
+  db.settings.planMode = program.mode === 'rotation' ? 'rotation' : 'schedule';
   for (const [name, days, items] of program.routines) {
     const id = uid();
     db.routines.push({ id, name, items: items.map(([exId, sets, repMin, repMax]) => ({ exId, sets, repMin, repMax })) });

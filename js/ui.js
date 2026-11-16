@@ -189,3 +189,50 @@ export function deltaChip(diff, { format = (v) => String(v), neutral = 'Same' } 
   const up = diff > 0;
   return `<span class="delta ${up ? 'up' : 'down'}">${icon(up ? 'arrowUp' : 'arrowDown', { size: 12, stroke: 2.6 })}${esc(format(Math.abs(diff)))}</span>`;
 }
+
+/**
+ * Drag a row by its `.drag-handle` to reorder rows inside `list`.
+ * Calls onMove(from, to) when dropped (from === to if nothing moved).
+ */
+export function bindSortable(list, { row, onMove }) {
+  if (!list) return;
+  list.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.drag-handle');
+    if (!handle || !list.contains(handle)) return;
+    e.preventDefault();
+    const el = handle.closest(row);
+    const rows = [...list.querySelectorAll(row)];
+    const from = rows.indexOf(el);
+    const step = rows.length > 1
+      ? rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top
+      : el.offsetHeight;
+    const startY = e.clientY;
+    let to = from;
+    el.classList.add('dragging');
+    handle.setPointerCapture(e.pointerId);
+
+    const move = (ev) => {
+      const dy = ev.clientY - startY;
+      el.style.transform = `translateY(${dy}px)`;
+      to = Math.max(0, Math.min(rows.length - 1, from + Math.round(dy / step)));
+      rows.forEach((r, i) => {
+        if (r === el) return;
+        let shift = 0;
+        if (from < to && i > from && i <= to) shift = -step;
+        if (from > to && i < from && i >= to) shift = step;
+        r.style.transform = shift ? `translateY(${shift}px)` : '';
+      });
+    };
+    const up = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      rows.forEach((r) => { r.style.transform = ''; });
+      el.classList.remove('dragging');
+      onMove(from, to);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  });
+}

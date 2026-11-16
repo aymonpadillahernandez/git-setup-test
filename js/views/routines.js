@@ -4,10 +4,10 @@ import { db, commit, uid, exById, exName, routineById, addStarterProgram, schedu
 import { STARTER_PROGRAMS, DEFAULT_REP_RANGE } from '../data.js';
 import { esc, fmtSet, fmtRelativeDay } from '../format.js';
 import { icon } from '../icons.js';
-import { onAction, onInput, openSheet, actionSheet, confirmAction, toast, navigate } from '../ui.js';
+import { onAction, onInput, openSheet, actionSheet, confirmAction, toast, navigate, segmented, bindSortable } from '../ui.js';
 import { startWorkout, openWorkoutSheet, editWorkout } from '../workout.js';
 import { pickExercises } from '../picker.js';
-import { lastSession, topSet, workoutsDesc } from '../stats.js';
+import { lastSession, topSet, workoutsDesc, todayPlan } from '../stats.js';
 
 function lastDone(routineId) {
   return workoutsDesc().find((w) => w.routineId === routineId) || null;
@@ -30,7 +30,15 @@ export function planView() {
       </section>`
     : '';
 
-  const schedule = routines.length ? `<div class="section-head"><h2>Weekly schedule</h2></div>
+  const rotation = db.settings.planMode !== 'schedule';
+  const plan = routines.length ? todayPlan() : null;
+  const modeSwitch = routines.length ? `<div class="section-head"><h2>How you train</h2></div>
+    <div class="filter-row plan-mode">${segmented('planMode', [['rotation', 'In order'], ['schedule', 'Fixed days']], rotation ? 'rotation' : 'schedule', { action: 'plan-mode' })}</div>
+    <p class="footnote">${rotation
+      ? 'Train as many days a week as you like. Today always shows the next workout in your order, after the last one you did. After the last one, it starts again from the first.'
+      : 'Each workout belongs to a weekday. The Today tab shows that day’s workout, and offers a missed one again on your next free day.'}</p>` : '';
+
+  const schedule = routines.length && !rotation ? `<div class="section-head"><h2>Weekly schedule</h2></div>
     <section class="card list">${weekdays().map((d) => {
       const r = scheduledRoutine(d);
       return `<button class="row sched-row" data-action="sched-day" data-day="${d}">
@@ -39,16 +47,18 @@ export function planView() {
         ${icon('chevronRight', { size: 16, stroke: 2.4, cls: 'chev' })}
       </button>`;
     }).join('')}</section>
-    <p class="footnote">The Today tab shows the workout planned for each day, with last week’s weight and reps. Miss a day and it’s offered again on your next free day.</p>` : '';
+    ` : '';
 
-  const cards = routines.map((r) => {
+  const cards = routines.map((r, i) => {
     const names = r.items.map((it) => exName(it.exId));
     const preview = names.slice(0, 3).join(' · ') + (names.length > 3 ? ` +${names.length - 3}` : '');
     const last = lastDone(r.id);
     const days = daysFor(r.id).map((d) => DAY_NAMES[d].slice(0, 3)).join(' · ');
-    return `<article class="routine-card">
+    const isNext = rotation && plan?.upNext?.id === r.id;
+    return `<article class="routine-card ${isNext ? 'next' : ''}">
+      ${rotation ? `<span class="drag-handle" aria-label="Reorder">${icon('grip', { size: 20, stroke: 2 })}</span><span class="rc-num">${i + 1}</span>` : ''}
       <button class="rc-main" data-action="routine-preview" data-id="${esc(r.id)}">
-        <h3>${esc(r.name)}${days ? ` <span class="rc-days">${esc(days)}</span>` : ''}</h3>
+        <h3>${esc(r.name)}${!rotation && days ? ` <span class="rc-days">${esc(days)}</span>` : ''}${isNext ? ' <span class="rc-next">Next</span>' : ''}</h3>
         <p class="rc-ex">${esc(preview || 'No exercises yet')}</p>
         <p class="rc-last">${icon('calendar', { size: 13, stroke: 2.2 })} ${last ? esc(fmtRelativeDay(last.start)) : 'Not done yet'}</p>
       </button>
@@ -65,9 +75,10 @@ export function planView() {
   return {
     title: 'Plan',
     body: `${active}
+      ${modeSwitch}
       ${schedule}
-      <div class="section-head"><h2>Routines</h2><a class="text-btn" href="#/routines/new">${icon('plus', { size: 17, stroke: 2.4 })} New</a></div>
-      ${routines.length ? `<div class="routine-grid">${cards}</div>` : `<section class="card empty-routines">
+      <div class="section-head"><h2>${rotation && routines.length ? 'Your order' : 'Routines'}</h2>${rotation && routines.length > 1 ? '<span class="section-note">Drag to reorder</span>' : ''}<a class="text-btn" href="#/routines/new">${icon('plus', { size: 17, stroke: 2.4 })} New</a></div>
+      ${routines.length ? `<div class="routine-grid ${rotation ? 'sortable' : ''}">${cards}</div>` : `<section class="card empty-routines">
           <p>Routines are your workout templates: pick the exercises and rep ranges once, give each a day, and Lift has it ready every time.</p>
           <a class="btn tinted wide" href="#/routines/new">Create Routine</a>
           <div class="field-label">Or start with a proven program</div>
@@ -75,8 +86,22 @@ export function planView() {
         </section>`}
       ${db.active ? '' : `<button class="btn plain wide" data-action="quick-start">${icon('plus', { size: 18, stroke: 2.4 })} Start Empty Workout</button>`}
       <button class="btn plain wide" data-action="log-past">${icon('calendar', { size: 18 })} Log a Past Workout</button>`,
+    mount: (root) => bindSortable(root.querySelector('.routine-grid.sortable'), {
+      row: '.routine-card',
+      onMove: (from, to) => {
+        if (from === to) return;
+        const [r] = db.routines.splice(from, 1);
+        db.routines.splice(to, 0, r);
+        commit();
+      },
+    }),
   };
 }
+
+onAction('plan-mode', (el) => {
+  db.settings.planMode = el.dataset.value === 'schedule' ? 'schedule' : 'rotation';
+  commit();
+});
 
 onAction('sched-day', async (el) => {
   const d = Number(el.dataset.day);
@@ -193,7 +218,16 @@ export function routineEditorView(id) {
       ${draft.items.length ? `<section class="card list sortable">${rows}</section>` : ''}
       <button class="btn tinted wide" data-action="re-add">${icon('plus', { size: 18, stroke: 2.4 })} Add Exercises</button>
       ${draft.isNew ? '' : '<button class="btn plain destructive wide" data-action="re-delete">Delete Routine</button>'}`,
-    mount: (root) => bindReorder(root),
+    mount: (root) => bindSortable(root.querySelector('.sortable'), {
+      row: '.re-row',
+      onMove: (from, to) => {
+        if (to !== from && draft) {
+          const [item] = draft.items.splice(from, 1);
+          draft.items.splice(to, 0, item);
+        }
+        rerender();
+      },
+    }),
   };
 }
 
@@ -291,48 +325,3 @@ onAction('re-delete', async () => {
   commit();
   navigate('plan');
 });
-
-/** Drag the grip handle to reorder rows. */
-function bindReorder(root) {
-  const list = root.querySelector('.sortable');
-  if (!list) return;
-  list.addEventListener('pointerdown', (e) => {
-    const handle = e.target.closest('.drag-handle');
-    if (!handle) return;
-    e.preventDefault();
-    const row = handle.closest('.re-row');
-    const rows = [...list.querySelectorAll('.re-row')];
-    const from = rows.indexOf(row);
-    const h = row.offsetHeight;
-    const startY = e.clientY;
-    let to = from;
-    row.classList.add('dragging');
-    handle.setPointerCapture(e.pointerId);
-
-    const move = (ev) => {
-      const dy = ev.clientY - startY;
-      row.style.transform = `translateY(${dy}px)`;
-      to = Math.max(0, Math.min(rows.length - 1, from + Math.round(dy / h)));
-      rows.forEach((r, i) => {
-        if (r === row) return;
-        let shift = 0;
-        if (from < to && i > from && i <= to) shift = -h;
-        if (from > to && i < from && i >= to) shift = h;
-        r.style.transform = shift ? `translateY(${shift}px)` : '';
-      });
-    };
-    const up = () => {
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', up);
-      handle.removeEventListener('pointercancel', up);
-      if (to !== from && draft) {
-        const [item] = draft.items.splice(from, 1);
-        draft.items.splice(to, 0, item);
-      }
-      rerender();
-    };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', up);
-    handle.addEventListener('pointercancel', up);
-  });
-}

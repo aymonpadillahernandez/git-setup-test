@@ -7,7 +7,7 @@ import { icon } from './icons.js';
 import { openSheet } from './ui.js';
 
 export function showOnboarding() {
-  const choice = { unit: db.settings.unit, goal: db.settings.weeklyGoal, program: 'ppl' };
+  const choice = { unit: db.settings.unit, goal: db.settings.weeklyGoal, program: 'mySplit' };
 
   const welcome = () => `<div class="onb">
       <div class="onb-scroll">
@@ -35,7 +35,7 @@ export function showOnboarding() {
           <span class="stepper"><button data-onb="goal" data-d="-1" aria-label="Lower">${icon('minus', { size: 15, stroke: 2.6 })}</button>
           <span class="stepper-val" data-goal>${choice.goal}</span>
           <button data-onb="goal" data-d="1" aria-label="Raise">${icon('plus', { size: 15, stroke: 2.6 })}</button></span></div></section>
-        <div class="field-label">Starter routines</div>
+        <div class="field-label">Your program</div>
         <section class="card list flush">
           ${Object.entries(STARTER_PROGRAMS).map(([k, p]) => `<button class="row radio ${choice.program === k ? 'on' : ''}" data-onb="program" data-v="${k}">
             <span class="row-main"><span class="row-title">${esc(p.label)}</span><span class="row-sub">${esc(p.detail)}</span></span>
@@ -62,7 +62,7 @@ export function showOnboarding() {
     if (kind === 'program') {
       choice.program = b.dataset.v;
       const p = STARTER_PROGRAMS[choice.program];
-      if (p) choice.goal = new Set(p.routines.flatMap(([, days]) => days)).size;
+      if (p) choice.goal = p.mode === 'rotation' ? 4 : new Set(p.routines.flatMap(([, days]) => days)).size;
     }
     if (kind === 'done') {
       db.settings.unit = choice.unit;

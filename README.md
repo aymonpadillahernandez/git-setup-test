@@ -11,29 +11,45 @@ account and no server. Your data stays on your phone.
 
 ## Your day in the gym
 
-1. **Open Lift.** The **Today** tab shows today's workout from your weekly plan
-   (e.g. Monday = Push). Each exercise shows the weight × reps of every set from
-   last time, plus today's **target**.
+1. **Open Lift.** The **Today** tab shows the next workout in your order
+   (Day 1 → Day 2 → … → Day 5 → Day 1). Each exercise shows the weight × reps of
+   every set from the last time you did that day, plus today's **target**.
 2. **Tap Start.** Every set is pre-filled with last session's numbers. Tap ✓ if you
    matched them, or type what you actually did.
 3. **Tap Finish.** Today's sets are saved and become the **baseline for next
    time**. Everything is kept forever in History and Progress.
 
-Missed a day? On your next free day, Today offers it as a **catch-up**. On rest days
-it shows what's next.
+Train as many days a week as you like (4 one week, 6 the next). Lift doesn't care
+about weekdays in this mode: it always picks the workout after the last one you
+finished. If you'd rather tie workouts to weekdays, switch **Plan → How you train**
+to **Fixed days**. Then a missed day is offered as a catch-up on your next free day.
+
+## Your program (preloaded)
+
+| Day | Exercises |
+|---|---|
+| **Day 1 · Shoulders** | Dumbbell Front Raise · Seated Dumbbell Press · Cable Face Pull |
+| **Day 2 · Chest** | Flat Bench Press · Pec Deck · Incline Bench Press |
+| **Day 3 · Legs** | Leg Extension · Seated Leg Curl · Calf Press · Leg Press · Hip Abduction (in → out) · Hip Adduction (out → in) · Hip Thrust |
+| **Day 4 · Back** | Pullover · Back Extension · Seated Cable Row · Machine Row |
+| **Day 5 · Biceps & Triceps** | Hammer Curl · Overhead Triceps Extension · Dumbbell Curl · Triceps Rope Pushdown |
+
+Every exercise starts at 3 sets × 8–12 reps. Change sets, rep ranges, exercises or
+order in **Plan**, and rename any exercise in **Settings → Exercises** (its history
+stays attached).
 
 ## What it does
 
 | Tab | What you get |
 |---|---|
-| **Today** | The workout of the day with last time's sets and today's targets, a week strip (done / planned / rest), rings for workouts vs. weekly goal and volume vs. last week, your streak, an 8-week volume chart, and recent records. |
-| **Plan** | Your **weekly schedule** (tap a day to pick a routine or rest) and your routines. Each exercise in a routine has sets and a **rep range** (e.g. 5–8 or 8–12). Starter programs come with a schedule: Push/Pull/Legs, Upper/Lower, and Full Body. |
+| **Today** | The next workout with last time's sets and today's targets, where you are in your order (e.g. 3 of 5), a week strip of the days you trained, rings for workouts vs. weekly goal and volume vs. last week, your streak, an 8-week volume chart, and recent records. |
+| **Plan** | **How you train**: *In order* (numbered list, drag to reorder) or *Fixed days* (tap a weekday to pick a workout). Each exercise in a workout has sets and a **rep range** (e.g. 8–12). Other ready-made programs (Push/Pull/Legs, Upper/Lower, Full Body) are available too. |
 | **History** | Every workout grouped by week, with duration, sets, volume and record count. Open one to see each set compared with the previous session. Edit it, delete it, or do it again. |
 | **Progress** | Every exercise you've trained, with its latest top set, change vs. the previous week, and a trend line. Each exercise has its own page with **strength (est. 1RM)**, **weight** and **reps** charts that share the same weeks, a weekly volume chart, personal records, and a **week-by-week log of every set's weight × reps**. |
 
 While you train:
 
-- The **Previous** column shows last session's sets (from the same routine), and empty fields are pre-filled with them.
+- The **Previous** column shows last session's sets (from the same day of your program), and empty fields are pre-filled with them.
 - Each exercise shows a target using **double progression** (below).
 - When a set beats your best weight or estimated 1RM, you get a **🏆 record** right away.
 - A **rest timer** starts after each set (adjustable, or turn it off in Settings).

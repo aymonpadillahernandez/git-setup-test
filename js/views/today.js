@@ -16,18 +16,23 @@ import { onAction, emptyState, deltaChip } from '../ui.js';
 import { startWorkout, openWorkoutSheet } from '../workout.js';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+/** "Day 3 · Legs" → "Day 3" for tight spaces. */
+const shortName = (name) => String(name || '').split(' · ')[0];
 const setsLine = (sets, u) => sets.map((s) => (s.w ? `${wVal(s.w, u)}×${s.r}` : `${s.r}`)).join(' · ');
 
 // ---- Week strip -------------------------------------------------------------------
 
 function weekStrip(plan) {
+  const rotation = plan.mode === 'rotation';
   return `<div class="week-strip" role="list" aria-label="This week">${plan.week.map((d) => {
     const done = d.workouts.length > 0;
-    const planned = !!d.routine;
-    const missed = d.isPast && planned && !done;
-    const name = d.workouts[0]?.name || d.routine?.name || (d.isPast ? '' : 'Rest');
+    // In rotation mode nothing is tied to a weekday: only today holds the next workout.
+    const routine = rotation ? (d.isToday ? plan.upNext : null) : d.routine;
+    const planned = !!routine;
+    const missed = !rotation && d.isPast && planned && !done;
+    const name = shortName(d.workouts[0]?.name || routine?.name || (rotation || d.isPast ? '' : 'Rest'));
     const state = done ? 'done' : missed ? 'missed' : planned ? 'planned' : 'rest';
-    const label = `${DAY_NAMES[d.weekday]}: ${done ? `${d.workouts[0].name}, done` : planned ? `${d.routine.name}${missed ? ', missed' : ''}` : 'rest'}`;
+    const label = `${DAY_NAMES[d.weekday]}: ${done ? `${d.workouts[0].name}, done` : planned ? `${routine.name}${missed ? ', missed' : ''}` : rotation ? 'no workout' : 'rest'}`;
     return `<div class="ws-day ${state} ${d.isToday ? 'today' : ''}" role="listitem" aria-label="${esc(label)}">
       <span class="ws-letter">${DAY_NAMES[d.weekday][0]}</span>
       <span class="ws-dot">${done ? icon('check', { size: 14, stroke: 3 }) : ''}</span>
@@ -47,7 +52,7 @@ function plannedList(routine, u) {
         <span class="te-name">${esc(exName(it.exId))}</span>
         <span class="te-last">${last ? `${esc(setsLine(last.sets, u))}<span class="te-date"> · ${esc(fmtMonthDay(last.workout.start))}</span>` : `${plural(it.sets, 'set')} · ${it.repMin}–${it.repMax} reps · no baseline yet`}</span>
       </span>
-      <span class="te-goal ${goal?.kind === 'weight' ? 'up' : ''}">${goal ? `${goal.kind === 'weight' ? icon('arrowUp', { size: 12, stroke: 2.8 }) : ''}${esc(fmtSet(goal, u, { short: true }))}` : '—'}</span>
+      ${goal ? `<span class="te-goal ${goal.kind === 'weight' ? 'up' : ''}">${goal.kind === 'weight' ? icon('arrowUp', { size: 12, stroke: 2.8 }) : ''}${esc(fmtSet(goal, u, { short: true }))}</span>` : '<span class="te-new">First time</span>'}
     </a>`;
   }).join('');
   return `<div class="today-cols"><span>Last time (${esc(u)} × reps)</span><span>Target</span></div>
@@ -100,6 +105,7 @@ function todayCard(plan, u) {
       <div class="today-cols"><span>Logged today (${esc(u)} × reps)</span><span>vs last time</span></div>
       <div class="today-list">${rows}</div>
       <p class="today-note">${icon('check', { size: 13, stroke: 2.8 })} Saved as your baseline for next time.</p>
+      ${plan.mode === 'rotation' && plan.upNext ? `<p class="today-upnext">Next time: <strong>${esc(plan.upNext.name)}</strong></p>` : ''}
       <div class="today-actions two">
         <a class="btn tinted" href="#/history/${esc(w.id)}">View or Edit</a>
         <button class="btn plain" data-action="go-start">Another Workout</button>
@@ -133,10 +139,12 @@ function todayCard(plan, u) {
   const sets = r.items.reduce((n, it) => n + it.sets, 0);
   const kicker = plan.kind === 'today' ? 'Today’s workout'
     : plan.kind === 'catchup' ? `Catch up · planned for ${DAY_NAMES[new Date(plan.catchupDay).getDay()]}`
-      : 'Up next';
+      : plan.cycle ? `Today’s workout · ${plan.cycle.index + 1} of ${plan.cycle.total}` : 'Up next';
+  const cycleBar = plan.cycle ? `<div class="cycle" aria-label="Workout ${plan.cycle.index + 1} of ${plan.cycle.total} in your rotation">${db.routines.map((x, i) => `<span class="cycle-seg ${i < plan.cycle.index ? 'done' : i === plan.cycle.index ? 'now' : ''}" title="${esc(x.name)}"></span>`).join('')}</div>` : '';
   const meta = `${plural(r.items.length, 'exercise')} · ${plural(sets, 'set')}${lastDone ? ` · last done ${esc(fmtDate(lastDone.start))}` : ''}`;
   return `<section class="card today-card">${strip}
     ${head(esc(kicker), r.name, meta)}
+    ${cycleBar}
     ${plannedList(r, u)}
     <div class="today-actions">
       <button class="btn filled wide big" data-action="today-start" data-id="${esc(r.id)}">${icon('play', { size: 18 })} Start ${esc(r.name)}</button>
