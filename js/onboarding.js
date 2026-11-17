@@ -6,11 +6,20 @@ import { esc } from './format.js';
 import { icon } from './icons.js';
 import { openSheet } from './ui.js';
 
+// Running in Safari on an iPhone (not yet installed to the Home Screen)?
+const inSafariOnIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent)
+  && !(window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true);
+
+const installNote = () => (inSafariOnIOS() ? `<div class="onb-install">
+    <strong>Install Lift first</strong>
+    <span>Tap ≡ next to the address at the bottom → Share → Add to Home Screen. Then open Lift from your Home Screen and set it up there. Safari keeps separate data.</span>
+  </div>` : '');
+
 export function showOnboarding() {
   const choice = { unit: db.settings.unit, goal: db.settings.weeklyGoal, program: 'mySplit' };
 
   const welcome = () => `<div class="onb">
-      <div class="onb-scroll">
+      <div class="onb-scroll">${installNote()}
         <img class="onb-icon" src="icons/icon-180.png" alt="" width="84" height="84">
         <h1>Welcome to Lift</h1>
         <ul class="onb-features">
@@ -23,7 +32,7 @@ export function showOnboarding() {
     </div>`;
 
   const setup = () => `<div class="onb">
-      <div class="onb-scroll">
+      <div class="onb-scroll">${installNote()}
         <h1 class="onb-h">Quick setup</h1>
         <div class="field-label">Units</div>
         <div class="segmented big" data-onb-group="unit">

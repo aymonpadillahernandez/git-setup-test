@@ -177,7 +177,7 @@ export function todayView() {
     ? `<section class="card hint-card">
         <div class="hint-icon">${icon('addSquare', { size: 22 })}</div>
         <div class="hint-text"><strong>Add Lift to your Home Screen</strong>
-        <span>In Safari, tap ${icon('share', { size: 15 })} Share, then “Add to Home Screen”. It opens full-screen and works offline.</span></div>
+        <span>In Safari, tap ≡ next to the address (or ${icon('share', { size: 15 })} Share), then Share → “Add to Home Screen”. It opens full-screen and works offline.</span></div>
         <button class="icon-btn small" data-action="hide-install" aria-label="Dismiss">${icon('close', { size: 16 })}</button>
       </section>`
     : '';

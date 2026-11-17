@@ -38,10 +38,12 @@ code. **Your workouts are never in the repository; they stay on your phone.**
 
 1. Open **Safari** (it must be Safari, not Chrome) and go to
    **aymonpadillahernandez.github.io/git-setup-test**
-2. Tap the **Share** button (the square with an arrow pointing up). If you don't
-   see it, tap **···** first.
-3. Scroll down and tap **Add to Home Screen**, then **Add**.
-4. Open **Lift** from your Home Screen.
+2. Tap the **≡** icon on the left of the address bar at the bottom, then tap
+   **Share**. (On older iPhones, the **Share** button, a square with an up
+   arrow, is right in the bottom bar.)
+3. Scroll down and tap **Add to Home Screen** (if it's not listed, tap **More**).
+   Leave **Open as Web App** on and tap **Add**.
+4. Open **Lift** from your Home Screen. Do the setup here, not in Safari.
 5. Choose **kg** or **lb**, keep **My 5-day split**, and tap **Get Started**.
 
 That's it. Lift opens full-screen like a normal app and works without signal in

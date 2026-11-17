@@ -728,3 +728,6 @@ a.today-ex:active { background: var(--press); }
 .done-ex { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; text-align: left; }
 .done-ex .muted { text-align: left; font-size: 13px; }
 .card-head.second { margin-top: 6px; border-top: 0.5px solid var(--sep); padding-top: 14px; }
+.onb-install { display: flex; flex-direction: column; gap: 3px; margin: 0 0 22px; padding: 12px 14px; border-radius: 14px; background: var(--accent-tint); color: var(--accent); font-size: 14px; line-height: 1.4; }
+.onb-install strong { font-size: 15px; }
+.onb-install span { color: var(--label); }
