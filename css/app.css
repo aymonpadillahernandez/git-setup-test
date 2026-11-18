@@ -731,3 +731,21 @@ a.today-ex:active { background: var(--press); }
 .onb-install { display: flex; flex-direction: column; gap: 3px; margin: 0 0 22px; padding: 12px 14px; border-radius: 14px; background: var(--accent-tint); color: var(--accent); font-size: 14px; line-height: 1.4; }
 .onb-install strong { font-size: 15px; }
 .onb-install span { color: var(--label); }
+
+/* ---------- Day picker (Today) ---------- */
+
+.day-picker { display: flex; gap: 6px; padding: 14px 12px 4px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.day-picker::-webkit-scrollbar { display: none; }
+.day-pick {
+  position: relative; flex: 1 0 58px; min-width: 58px; height: 54px; padding: 0 4px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  border: 0; border-radius: 12px; background: var(--fill); color: var(--label);
+  transition: background 0.15s, transform 0.1s;
+}
+.day-pick:active { transform: scale(0.96); }
+.day-pick.next { box-shadow: inset 0 0 0 2px var(--accent); }
+.day-pick.on { background: var(--accent); color: #fff; box-shadow: none; }
+.dp-title { font-size: 14px; font-weight: 700; white-space: nowrap; }
+.dp-sub { max-width: 100%; font-size: 11px; color: var(--label-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day-pick.on .dp-sub { color: rgba(255, 255, 255, 0.85); }
+.dp-done { position: absolute; top: -5px; right: -5px; width: 17px; height: 17px; border-radius: 9px; border: 2px solid var(--card); display: grid; place-items: center; background: var(--green-btn); color: #fff; }

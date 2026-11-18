@@ -21,7 +21,9 @@ account and no server. Your data stays on your phone.
 
 Train as many days a week as you like (4 one week, 6 the next). Lift doesn't care
 about weekdays in this mode: it always picks the workout after the last one you
-finished. If you'd rather tie workouts to weekdays, switch **Plan → How you train**
+finished. Want a different day? Tap any **Day 1–5** button on Today. You see that
+day's exercises with the weight × reps from the last time you did it, and after you
+finish, the order continues from the day you did. If you'd rather tie workouts to weekdays, switch **Plan → How you train**
 to **Fixed days**. Then a missed day is offered as a catch-up on your next free day.
 
 ## Your program (preloaded)
@@ -42,7 +44,7 @@ stays attached).
 
 | Tab | What you get |
 |---|---|
-| **Today** | The next workout with last time's sets and today's targets, where you are in your order (e.g. 3 of 5), a week strip of the days you trained, a ring for workouts vs. your weekly goal, your streak, workouts per week, and recent records. |
+| **Today** | Day buttons to pick any workout (the next in order is preselected; ✓ = done this week), with last time's sets and today's targets, where you are in your order (e.g. 3 of 5), a week strip of the days you trained, a ring for workouts vs. your weekly goal, your streak, workouts per week, and recent records. |
 | **Plan** | **How you train**: *In order* (numbered list, drag to reorder) or *Fixed days* (tap a weekday to pick a workout). Each exercise in a workout has sets and a **rep range** (e.g. 8–12). Other ready-made programs (Push/Pull/Legs, Upper/Lower, Full Body) are available too. |
 | **History** | Every workout grouped by week, with duration, sets and record count. Open one to see each set compared with the previous session. Edit it, delete it, or do it again. |
 | **Progress** | Every exercise you've trained, with its latest top set, change vs. the previous week, and a trend line. Each exercise has its own page with a **weight** chart and a **reps** chart (same weeks), your personal bests, and a **week-by-week log of every set's weight × reps**. |

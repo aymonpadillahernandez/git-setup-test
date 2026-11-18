@@ -1,7 +1,7 @@
 // Today tab: the workout of the day (with last session's numbers and today's
 // targets), this week at a glance, workouts per week and recent records.
 
-import { db, exName, exById, persist } from '../store.js';
+import { db, exName, exById, persist, routineById } from '../store.js';
 import {
   esc, fmtDateLong, fmtDate, fmtMonthDay, fmtWeekLabel, fmtNumber, fmtSet,
   fmtRelativeDay, plural, fmtDuration, fmtClock, wVal,
@@ -13,6 +13,7 @@ import {
   doneSets, workoutSetCount, workoutsDesc,
 } from '../stats.js';
 import { onAction, emptyState, deltaChip } from '../ui.js';
+import { startOfDay } from '../format.js';
 import { startWorkout, openWorkoutSheet } from '../workout.js';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -22,12 +23,12 @@ const setsLine = (sets, u) => sets.map((s) => (s.w ? `${wVal(s.w, u)}×${s.r}` :
 
 // ---- Week strip -------------------------------------------------------------------
 
-function weekStrip(plan) {
+function weekStrip(plan, chosen = null) {
   const rotation = plan.mode === 'rotation';
   return `<div class="week-strip" role="list" aria-label="This week">${plan.week.map((d) => {
     const done = d.workouts.length > 0;
     // In rotation mode nothing is tied to a weekday: only today holds the next workout.
-    const routine = rotation ? (d.isToday ? plan.upNext : null) : d.routine;
+    const routine = d.isToday && chosen ? chosen : rotation ? (d.isToday ? plan.upNext : null) : d.routine;
     const planned = !!routine;
     const missed = !rotation && d.isPast && planned && !done;
     const name = shortName(d.workouts[0]?.name || routine?.name || (rotation || d.isPast ? '' : 'Rest'));
@@ -59,8 +60,43 @@ function plannedList(routine, u) {
     <div class="today-list">${rows || '<p class="today-empty">This routine has no exercises yet.</p>'}</div>`;
 }
 
+// ---- Day picker ----------------------------------------------------------------------
+// Any workout day can be chosen for today. The choice lasts for the day; finishing a
+// workout continues the order from whichever day you did.
+
+let picked = null; // { id, day }
+
+function pickedRoutine() {
+  if (!picked || picked.day !== startOfDay(Date.now())) return null;
+  return routineById(picked.id) || null;
+}
+
+/** "Day 3 · Legs" → ["Day 3", "Legs"]; "Push" → ["Push", ""]. */
+function nameParts(name) {
+  const m = String(name).match(/^(.*?)\s*·\s*(.+)$/);
+  return m ? [m[1], m[2]] : [name, ''];
+}
+
+function dayPicker(plan, selectedId) {
+  if (db.routines.length < 2) return '';
+  const doneThisWeek = new Set(plan.week.flatMap((d) => d.workouts.map((w) => w.routineId)));
+  const nextId = plan.mode === 'rotation' ? plan.upNext?.id : plan.routine?.id;
+  return `<div class="day-picker" role="group" aria-label="Choose a workout">${db.routines.map((r) => {
+    const [title, sub] = nameParts(r.name);
+    const on = r.id === selectedId;
+    const isNext = r.id === nextId;
+    const done = doneThisWeek.has(r.id);
+    const label = `${r.name}${isNext ? ', next in order' : ''}${done ? ', done this week' : ''}`;
+    return `<button class="day-pick ${on ? 'on' : ''} ${isNext ? 'next' : ''}" data-action="pick-day" data-id="${esc(r.id)}" aria-pressed="${on}" aria-label="${esc(label)}">
+      ${done ? `<span class="dp-done">${icon('check', { size: 9, stroke: 3.4 })}</span>` : ''}
+      <span class="dp-title">${esc(title)}</span>${sub ? `<span class="dp-sub">${esc(sub)}</span>` : ''}
+    </button>`;
+  }).join('')}</div>`;
+}
+
 function todayCard(plan, u) {
-  const strip = weekStrip(plan);
+  const chosen = pickedRoutine();
+  const strip = weekStrip(plan, chosen);
   const head = (kicker, title, meta, cls = '') => `<div class="today-head ${cls}">
       <div class="today-kicker">${kicker}</div>
       <h2 class="today-name">${esc(title)}</h2>
@@ -84,7 +120,7 @@ function todayCard(plan, u) {
   }
 
   // Already trained today: show what was logged (it is now the baseline for next time).
-  if (plan.todayWorkout) {
+  if (plan.todayWorkout && !chosen) {
     const w = plan.todayWorkout;
     const rows = w.exercises.filter((wex) => doneSets(wex).length).map((wex) => {
       const sets = doneSets(wex);
@@ -108,7 +144,7 @@ function todayCard(plan, u) {
       ${plan.mode === 'rotation' && plan.upNext ? `<p class="today-upnext">Next time: <strong>${esc(plan.upNext.name)}</strong></p>` : ''}
       <div class="today-actions two">
         <a class="btn tinted" href="#/history/${esc(w.id)}">View or Edit</a>
-        <button class="btn plain" data-action="go-start">Another Workout</button>
+        <button class="btn plain" data-action="pick-another">Another Workout</button>
       </div>
     </section>`;
   }
@@ -123,32 +159,34 @@ function todayCard(plan, u) {
     </section>`;
   }
 
-  if (plan.kind === 'rest') {
+  if (plan.kind === 'rest' && !chosen) {
     const next = plan.nextPlanned;
     return `<section class="card today-card">${strip}
-      ${head('Rest day', 'Recover and grow', next ? `Next up: <strong>${esc(next.routine.name)}</strong> on ${esc(DAY_NAMES[new Date(next.day).getDay()])}.` : 'Nothing planned. Enjoy the day off.')}
-      <div class="today-actions two">
-        ${next ? `<button class="btn tinted" data-action="today-start" data-id="${esc(next.routine.id)}">Do ${esc(next.routine.name)} Now</button>` : ''}
-        <button class="btn plain" data-action="go-start">Other Workout</button>
-      </div>
+      ${head('Rest day', 'Recover and grow', `${next ? `Next up: <strong>${esc(next.routine.name)}</strong> on ${esc(DAY_NAMES[new Date(next.day).getDay()])}. ` : ''}Want to train anyway? Pick a workout:`)}
+      ${dayPicker(plan, null)}
+      <div class="today-actions"></div>
     </section>`;
   }
 
-  const r = plan.routine;
+  const r = chosen || plan.routine;
+  const isDefault = !chosen || (chosen.id === plan.routine?.id && !plan.todayWorkout);
   const lastDone = workoutsDesc().find((w) => w.routineId === r.id);
   const sets = r.items.reduce((n, it) => n + it.sets, 0);
-  const kicker = plan.kind === 'today' ? 'Today’s workout'
-    : plan.kind === 'catchup' ? `Catch up · planned for ${DAY_NAMES[new Date(plan.catchupDay).getDay()]}`
-      : plan.cycle ? `Today’s workout · ${plan.cycle.index + 1} of ${plan.cycle.total}` : 'Up next';
-  const cycleBar = plan.cycle ? `<div class="cycle" aria-label="Workout ${plan.cycle.index + 1} of ${plan.cycle.total} in your rotation">${db.routines.map((x, i) => `<span class="cycle-seg ${i < plan.cycle.index ? 'done' : i === plan.cycle.index ? 'now' : ''}" title="${esc(x.name)}"></span>`).join('')}</div>` : '';
+  const kicker = !isDefault ? 'Your pick for today'
+    : plan.kind === 'today' ? 'Today’s workout'
+      : plan.kind === 'catchup' ? `Catch up · planned for ${DAY_NAMES[new Date(plan.catchupDay).getDay()]}`
+        : plan.cycle ? `Today’s workout · ${plan.cycle.index + 1} of ${plan.cycle.total}` : 'Up next';
   const meta = `${plural(r.items.length, 'exercise')} · ${plural(sets, 'set')}${lastDone ? ` · last done ${esc(fmtDate(lastDone.start))}` : ''}`;
+  const backTo = plan.todayWorkout ? 'Back to today’s summary'
+    : plan.kind === 'rest' ? 'Back to rest day'
+      : plan.routine ? `Back to ${nameParts(plan.routine.name)[0]}${plan.mode === 'rotation' ? ' (next in order)' : ''}` : '';
   return `<section class="card today-card">${strip}
+    ${dayPicker(plan, r.id)}
     ${head(esc(kicker), r.name, meta)}
-    ${cycleBar}
     ${plannedList(r, u)}
     <div class="today-actions">
       <button class="btn filled wide big" data-action="today-start" data-id="${esc(r.id)}">${icon('play', { size: 18 })} Start ${esc(r.name)}</button>
-      <button class="btn plain small" data-action="go-start">Do a different workout</button>
+      ${!isDefault && backTo ? `<button class="btn plain small" data-action="unpick">${esc(backTo)}</button>` : ''}
     </div>
   </section>`;
 }
@@ -243,7 +281,26 @@ export function todayView() {
   };
 }
 
-onAction('today-start', (el) => startWorkout({ routineId: el.dataset.id }));
+onAction('today-start', (el) => { picked = null; startWorkout({ routineId: el.dataset.id }); });
+
+const refresh = () => document.dispatchEvent(new Event('rerender'));
+
+onAction('pick-day', (el) => {
+  const plan = todayPlan();
+  const isDefault = !plan.todayWorkout && plan.kind !== 'rest' && plan.routine?.id === el.dataset.id;
+  picked = isDefault ? null : { id: el.dataset.id, day: startOfDay(Date.now()) };
+  refresh();
+});
+
+onAction('pick-another', () => {
+  const plan = todayPlan();
+  const id = (plan.upNext || db.routines[0])?.id;
+  if (!id) return;
+  picked = { id, day: startOfDay(Date.now()) };
+  refresh();
+});
+
+onAction('unpick', () => { picked = null; refresh(); });
 onAction('resume-workout', () => openWorkoutSheet());
 onAction('quick-start', () => startWorkout());
 onAction('hide-install', () => { db.meta.hideInstall = true; persist(); document.querySelector('.hint-card')?.remove(); });
