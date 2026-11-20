@@ -543,7 +543,9 @@ a.row:active, button.row:active, label.row:active { background: var(--press); }
 .set-inner { position: relative; z-index: 1; height: 46px; background: var(--card); transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s; }
 .set-row.done .set-inner { background: linear-gradient(var(--done-bg), var(--done-bg)), var(--card); }
 .set-row.swiping .set-inner { transition: none; }
-.set-del-bg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding-right: 20px; background: var(--red-fill); color: #fff; font-weight: 600; font-size: 15px; opacity: 0.85; }
+.set-del-bg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding-right: 20px; background: var(--red-fill); color: #fff; font-weight: 600; font-size: 15px; opacity: 0.85; visibility: hidden; }
+/* The red delete layer exists only while a row is being swiped (otherwise its edge can peek out on high-res screens). */
+.set-row.swiping .set-del-bg, .set-row.settling .set-del-bg, .set-row.removing .set-del-bg { visibility: visible; }
 .set-row.armed .set-del-bg { opacity: 1; }
 .set-num { text-align: center; font-weight: 600; font-size: 15px; color: var(--label); }
 .pr-badge { color: var(--gold); display: grid; place-items: center; }

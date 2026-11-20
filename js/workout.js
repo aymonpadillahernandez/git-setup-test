@@ -160,14 +160,20 @@ function cardContext(wex) {
   return { last, bests };
 }
 
-/** Placeholder values for set i: the set above (if filled) or last session's matching set. */
+/**
+ * Placeholder values for set i. Weight and reps each come from the nearest set above
+ * that has one; otherwise from last session's matching set.
+ */
 function placeholderFor(wex, i, last) {
-  for (let j = i - 1; j >= 0; j--) {
+  let w = null;
+  let r = null;
+  for (let j = i - 1; j >= 0 && (w == null || r == null); j--) {
     const s = wex.sets[j];
-    if (s.r != null || s.w != null) return { w: s.w, r: s.r };
+    if (w == null && s.w != null) w = s.w;
+    if (r == null && s.r != null) r = s.r;
   }
   const prev = last?.sets[i] || last?.sets[last.sets.length - 1];
-  return prev ? { w: prev.w, r: prev.r } : { w: null, r: null };
+  return { w: w ?? prev?.w ?? null, r: r ?? prev?.r ?? null };
 }
 
 function renderCard(wex) {
@@ -487,6 +493,8 @@ function bindSwipeToDelete(body) {
       }, 180);
     } else {
       inner.style.transform = '';
+      row.classList.add('settling');
+      setTimeout(() => row.classList.remove('settling'), 260);
     }
   };
   body.addEventListener('pointerup', end);
